@@ -10,9 +10,9 @@ This checklist tracks Phase 3 development items. Mark items as completed as prog
 - [x] Implement Python worker utility using `qdrant-client` to create collections and upsert text chunks with embeddings
 
 ## P3-2: PubMed & SEC EDGAR Provider SDK Wrappers
-- [ ] Create standard HTTP client wrapper for PubMed Entrez Utilities API (Search and Fetch tools)
-- [ ] Create SEC EDGAR HTTP client wrapper with compliant User-Agent headers
-- [ ] Implement rate limiting and automatic retries for both providers
+- [x] Create standard HTTP client wrapper for PubMed Entrez Utilities API (Search and Fetch tools)
+- [x] Create SEC EDGAR HTTP client wrapper with compliant User-Agent headers
+- [x] Implement rate limiting and automatic retries for both providers
 
 ## P3-3: RAG Orchestrator (Hybrid Search & Prompt Builder)
 - [ ] Implement hybrid query router in Python (extracts search keywords from glossary matching, runs keyword BM25 query + Qdrant vector query, and merges results)
