@@ -1,0 +1,136 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Momo.App.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="850" d:DesignHeight="600"
+        x:Class="Momo.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Momo Local AI Transcription Dashboard"
+        Width="1050" Height="650"
+        WindowStartupLocation="CenterScreen"
+        Background="#12131C">
+
+    <Grid ColumnDefinitions="240, *, Auto">
+        <!-- Sidebar Navigation -->
+        <Border Grid.Column="0" Background="#1A1C29" BorderBrush="#25273C" BorderThickness="0,0,1,0">
+            <Grid RowDefinitions="Auto, *, Auto" Margin="20">
+                <!-- Header Logo -->
+                <StackPanel Grid.Row="0" Spacing="10" Margin="0,10,0,30">
+                    <TextBlock Text="MOMO" FontSize="26" FontWeight="Black" Foreground="#8B5CF6" LetterSpacing="2"/>
+                    <TextBlock Text="Local AI Workspace" FontSize="11" Foreground="#6D7090" Margin="2,0,0,0"/>
+                </StackPanel>
+
+                <!-- Project Quick Links -->
+                <StackPanel Grid.Row="1" Spacing="8">
+                    <Button Content="Queue Dashboard" Background="#26283C" Foreground="White" HorizontalAlignment="Stretch" Padding="12" CornerRadius="8"/>
+                    <Button Content="Local Files" Background="Transparent" Foreground="#6D7090" HorizontalAlignment="Stretch" Padding="12" CornerRadius="8"/>
+                    <Button Content="Export Templates" Background="Transparent" Foreground="#6D7090" HorizontalAlignment="Stretch" Padding="12" CornerRadius="8"/>
+                </StackPanel>
+
+                <!-- Footer Profile -->
+                <StackPanel Grid.Row="2" Spacing="5">
+                    <TextBlock Text="System Mode:" FontSize="10" Foreground="#6D7090"/>
+                    <TextBlock Text="Laptop Safe Mode (CPU)" FontSize="12" FontWeight="SemiBold" Foreground="#34D399"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Dashboard View -->
+        <Grid Grid.Column="1" RowDefinitions="Auto, *, Auto" Margin="25">
+            <!-- Top Action Ingester -->
+            <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
+                <StackPanel Grid.Column="0" Spacing="5">
+                    <TextBlock Text="Transcription Queue Manager" FontSize="20" FontWeight="Bold" Foreground="White"/>
+                    <TextBlock Text="Stage 1 Minimum Stable Baseline" FontSize="12" Foreground="#6D7090"/>
+                </StackPanel>
+                
+                <!-- Import Actions -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <TextBox x:Name="FilePathTextBox" Watermark="Enter audio file path..." Width="180" VerticalAlignment="Center" CornerRadius="8" Background="#1A1C29" BorderBrush="#25273C" Foreground="White"/>
+                    <CheckBox Content="Speaker Diarization" IsChecked="{Binding IsDiarizationEnabled}" Foreground="White" VerticalAlignment="Center" Margin="5,0"/>
+                    <CheckBox Content="Word Alignment" IsChecked="{Binding IsAlignmentEnabled}" Foreground="White" VerticalAlignment="Center" Margin="5,0"/>
+                    <Button Content="Import &amp; Enqueue" Command="{Binding ImportCommand}" CommandParameter="{Binding #FilePathTextBox.Text}" Background="#8B5CF6" Foreground="White" Padding="10,8" CornerRadius="8" FontWeight="SemiBold"/>
+                    <Button Content="⚙" Command="{Binding ToggleSettingsCommand}" ToolTip.Tip="Copilot Settings" Background="#26283C" Foreground="White" Padding="10,8" CornerRadius="8"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Jobs Queue Data Grid -->
+            <Border Grid.Row="1" Background="#1A1C29" CornerRadius="12" BorderBrush="#25273C" BorderThickness="1" Padding="15">
+                <Grid RowDefinitions="Auto, *">
+                    <TextBlock Grid.Row="0" Text="Job Queue Tasks" FontSize="14" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,10"/>
+                    
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" RowHeight="45" Background="Transparent">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Job ID" Binding="{Binding Id}" Width="150"/>
+                            <DataGridTextColumn Header="Media File" Binding="{Binding MediaFile.FilePath}" Width="*"/>
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
+                            <DataGridTextColumn Header="Priority" Binding="{Binding Priority}" Width="80"/>
+                            <DataGridTextColumn Header="Retries" Binding="{Binding RetryCount}" Width="80"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <!-- Bottom Progress & Action Controls -->
+            <Border Grid.Row="2" Margin="0,20,0,0" Background="#1A1C29" CornerRadius="12" BorderBrush="#25273C" BorderThickness="1" Padding="15">
+                <Grid ColumnDefinitions="*, Auto">
+                    <!-- Progress Metrics -->
+                    <StackPanel Grid.Column="0" Spacing="10" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StatusText}" FontSize="13" Foreground="White" FontWeight="SemiBold"/>
+                        <ProgressBar Value="{Binding ProgressPercentage}" Minimum="0" Maximum="100" Height="8" CornerRadius="4" Foreground="#8B5CF6" Background="#26283C" Width="450" HorizontalAlignment="Left"/>
+                    </StackPanel>
+
+                    <!-- Control Actions -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Button Content="Pause" Command="{Binding PauseCommand}" Background="#F59E0B" Foreground="White" Padding="15,8" CornerRadius="8"/>
+                        <Button Content="Resume" Command="{Binding ResumeCommand}" Background="#10B981" Foreground="White" Padding="15,8" CornerRadius="8"/>
+                        <Button Content="Cancel" Command="{Binding CancelCommand}" Background="#EF4444" Foreground="White" Padding="15,8" CornerRadius="8"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Right Settings Sidebar Panel -->
+        <Border Grid.Column="2" Width="260" Background="#1A1C29" BorderBrush="#25273C" BorderThickness="1,0,0,0" IsVisible="{Binding IsSettingsVisible}">
+            <ScrollViewer>
+                <StackPanel Margin="20" Spacing="20">
+                    <Grid ColumnDefinitions="*, Auto">
+                        <TextBlock Grid.Column="0" Text="Copilot Settings" FontSize="16" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="✕" Command="{Binding ToggleSettingsCommand}" Background="Transparent" Foreground="#6D7090" Padding="5" FontSize="14"/>
+                    </Grid>
+                    
+                    <Separator Background="#25273C" Height="1"/>
+
+                    <!-- Domain Glossary Selection -->
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Domain Glossaries" FontSize="13" FontWeight="SemiBold" Foreground="#8B5CF6"/>
+                        <ItemsControl ItemsSource="{Binding GlossaryOptions}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSelected}" Foreground="White" Margin="0,2"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <Separator Background="#25273C" Height="1"/>
+
+                    <!-- Role Selection -->
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="VC Analysis Role" FontSize="13" FontWeight="SemiBold" Foreground="#8B5CF6"/>
+                        <ComboBox ItemsSource="{Binding RoleOptions}" SelectedItem="{Binding SelectedRole}" HorizontalAlignment="Stretch" Background="#12131C" BorderBrush="#25273C" Foreground="White"/>
+                    </StackPanel>
+
+                    <Separator Background="#25273C" Height="1"/>
+
+                    <!-- Template Selection -->
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Export Template" FontSize="13" FontWeight="SemiBold" Foreground="#8B5CF6"/>
+                        <ComboBox ItemsSource="{Binding TemplateOptions}" SelectedItem="{Binding SelectedTemplate}" HorizontalAlignment="Stretch" Background="#12131C" BorderBrush="#25273C" Foreground="White"/>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</Window>
