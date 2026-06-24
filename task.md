@@ -5,9 +5,9 @@ This checklist tracks Phase 3 development items. Mark items as completed as prog
 ---
 
 ## P3-1: Qdrant Docker PoC & Embedding Ingest
-- [ ] Configure local Qdrant container compose or file-backed database bootstrap
-- [ ] Define schema mapping for Qdrant collection (payload fields: `transcript_id`, `speaker_id`, `start_time`, `end_time`, `text`, `project_id`)
-- [ ] Implement Python worker utility using `qdrant-client` to create collections and upsert text chunks with embeddings
+- [x] Configure local Qdrant container compose or file-backed database bootstrap
+- [x] Define schema mapping for Qdrant collection (payload fields: `transcript_id`, `speaker_id`, `start_time`, `end_time`, `text`, `project_id`)
+- [x] Implement Python worker utility using `qdrant-client` to create collections and upsert text chunks with embeddings
 
 ## P3-2: PubMed & SEC EDGAR Provider SDK Wrappers
 - [ ] Create standard HTTP client wrapper for PubMed Entrez Utilities API (Search and Fetch tools)
