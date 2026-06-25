@@ -15,9 +15,9 @@ This checklist tracks Phase 3 development items. Mark items as completed as prog
 - [x] Implement rate limiting and automatic retries for both providers
 
 ## P3-3: RAG Orchestrator (Hybrid Search & Prompt Builder)
-- [ ] Implement hybrid query router in Python (extracts search keywords from glossary matching, runs keyword BM25 query + Qdrant vector query, and merges results)
-- [ ] Construct prompt builder compiling transcripts context and external findings into a target LLM prompt
-- [ ] Integrate inference provider client (local Ollama endpoint or external model API) to generate final research report
+- [x] Implement hybrid query router in Python (extracts search keywords from glossary matching, runs keyword BM25 query + Qdrant vector query, and merges results)
+- [x] Construct prompt builder compiling transcripts context and external findings into a target LLM prompt
+- [x] Integrate inference provider client (local Ollama endpoint or external model API) to generate final research report
 
 ## P3-4: WebSocket Streaming PoC
 - [ ] Implement C# Avalonia streaming recorder buffer slicing audio every 5 seconds
