@@ -20,9 +20,9 @@ This checklist tracks Phase 3 development items. Mark items as completed as prog
 - [x] Integrate inference provider client (local Ollama endpoint or external model API) to generate final research report
 
 ## P3-4: WebSocket Streaming PoC
-- [ ] Implement C# Avalonia streaming recorder buffer slicing audio every 5 seconds
-- [ ] Create WebSocket listener endpoint `/ws/live-stream` on the Python worker
-- [ ] Implement streaming transcription loop executing a local Whisper `tiny` model in `int8` on raw incoming PCM chunks
+- [x] Implement C# Avalonia streaming recorder buffer slicing audio every 5 seconds
+- [x] Create WebSocket listener endpoint `/ws/live-stream` on the Python worker
+- [x] Implement streaming transcription loop executing a local Whisper `tiny` model in `int8` on raw incoming PCM chunks
 
 ## P3-5: Speaker Timeline & Tag Cloud UI
 - [ ] Build Speaker Timeline visual component in Avalonia displaying chronologically stacked, colored rectangles mapping speaker durations
