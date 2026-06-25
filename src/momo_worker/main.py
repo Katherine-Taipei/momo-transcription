@@ -359,8 +359,36 @@ def rag_ingest(request: IngestRequest, token: str = Depends(verify_token)):
 
 @app.post("/rag/query")
 def rag_query(request: QueryRequest, token: str = Depends(verify_token)):
-    res = rag_orchestrator.query_segments(request.project_id, request.query, request.limit)
-    return {"results": res}
+    # 1. Hybrid Search (RRF of BM25 + Qdrant vectors)
+    results = rag_orchestrator.hybrid_search(db_helper, request.project_id, request.query, limit=request.limit)
+    
+    # 2. Fetch external findings (PubMed & SEC)
+    external_findings = []
+    try:
+        pubmed_pmids = rag_orchestrator.pubmed_client.search(request.query, limit=2)
+        if pubmed_pmids:
+            external_findings.extend(rag_orchestrator.pubmed_client.fetch_summaries(pubmed_pmids))
+    except Exception:
+        pass
+        
+    try:
+        sec_filings = rag_orchestrator.sec_client.get_recent_filings(request.query, limit=2)
+        if sec_filings:
+            external_findings.extend(sec_filings)
+    except Exception:
+        pass
+        
+    # 3. Build Prompt
+    prompt = rag_orchestrator.build_prompt(results, external_findings, request.query)
+    
+    # 4. Generate Report
+    report = rag_orchestrator.generate_report(prompt)
+    
+    return {
+        "results": results,
+        "external_findings": external_findings,
+        "report": report
+    }
 
 @app.websocket("/ws/live-stream")
 async def live_stream_websocket(websocket: WebSocket, token: str):

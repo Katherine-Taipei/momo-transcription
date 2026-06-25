@@ -145,3 +145,17 @@ class DbHelper:
                 "selected_role": None,
                 "selected_template": None
             }
+
+    def get_project_segments(self, project_id: str) -> list:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT tw.word as text, tw.start_time as start, tw.end_time as end, tw.speaker_id as speaker, t.media_file_id 
+                FROM transcripts t 
+                JOIN transcript_words tw ON t.id = tw.transcript_id 
+                WHERE t.project_id = ?
+                """,
+                (project_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
