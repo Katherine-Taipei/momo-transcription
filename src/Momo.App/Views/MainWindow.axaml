@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Momo.App.ViewModels"
+        xmlns:controls="using:Momo.App.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="850" d:DesignHeight="600"
@@ -36,60 +37,168 @@
             </Grid>
         </Border>
 
-        <!-- Main Dashboard View -->
-        <Grid Grid.Column="1" RowDefinitions="Auto, *, Auto" Margin="25">
-            <!-- Top Action Ingester -->
-            <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
-                <StackPanel Grid.Column="0" Spacing="5">
-                    <TextBlock Text="Transcription Queue Manager" FontSize="20" FontWeight="Bold" Foreground="White"/>
-                    <TextBlock Text="Stage 1 Minimum Stable Baseline" FontSize="12" Foreground="#6D7090"/>
-                </StackPanel>
-                
-                <!-- Import Actions -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
-                    <TextBox x:Name="FilePathTextBox" Watermark="Enter audio file path..." Width="180" VerticalAlignment="Center" CornerRadius="8" Background="#1A1C29" BorderBrush="#25273C" Foreground="White"/>
-                    <CheckBox Content="Speaker Diarization" IsChecked="{Binding IsDiarizationEnabled}" Foreground="White" VerticalAlignment="Center" Margin="5,0"/>
-                    <CheckBox Content="Word Alignment" IsChecked="{Binding IsAlignmentEnabled}" Foreground="White" VerticalAlignment="Center" Margin="5,0"/>
-                    <Button Content="Import &amp; Enqueue" Command="{Binding ImportCommand}" CommandParameter="{Binding #FilePathTextBox.Text}" Background="#8B5CF6" Foreground="White" Padding="10,8" CornerRadius="8" FontWeight="SemiBold"/>
-                    <Button Content="⚙" Command="{Binding ToggleSettingsCommand}" ToolTip.Tip="Copilot Settings" Background="#26283C" Foreground="White" Padding="10,8" CornerRadius="8"/>
-                </StackPanel>
-            </Grid>
+        <!-- Main Tabbed Dashboard View -->
+        <TabControl Grid.Column="1" SelectedIndex="{Binding SelectedTabIndex}" Margin="15">
+            <TabControl.Styles>
+                <Style Selector="TabItem">
+                    <Setter Property="FontSize" Value="14"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                    <Setter Property="Foreground" Value="#6D7090"/>
+                    <Setter Property="Padding" Value="15,10"/>
+                </Style>
+                <Style Selector="TabItem:selected">
+                    <Setter Property="Foreground" Value="#8B5CF6"/>
+                </Style>
+            </TabControl.Styles>
 
-            <!-- Jobs Queue Data Grid -->
-            <Border Grid.Row="1" Background="#1A1C29" CornerRadius="12" BorderBrush="#25273C" BorderThickness="1" Padding="15">
-                <Grid RowDefinitions="Auto, *">
-                    <TextBlock Grid.Row="0" Text="Job Queue Tasks" FontSize="14" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,10"/>
-                    
-                    <DataGrid Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" RowHeight="45" Background="Transparent">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Job ID" Binding="{Binding Id}" Width="150"/>
-                            <DataGridTextColumn Header="Media File" Binding="{Binding MediaFile.FilePath}" Width="*"/>
-                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
-                            <DataGridTextColumn Header="Priority" Binding="{Binding Priority}" Width="80"/>
-                            <DataGridTextColumn Header="Retries" Binding="{Binding RetryCount}" Width="80"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
+            <!-- Tab 1: Queue Manager -->
+            <TabItem Header="Queue Dashboard">
+                <Grid RowDefinitions="Auto, *, Auto" Margin="10,20,10,10">
+                    <!-- Top Action Ingester -->
+                    <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
+                        <StackPanel Grid.Column="0" Spacing="5">
+                            <TextBlock Text="Transcription Queue Manager" FontSize="20" FontWeight="Bold" Foreground="White"/>
+                            <TextBlock Text="Stage 1 Minimum Stable Baseline" FontSize="12" Foreground="#6D7090"/>
+                        </StackPanel>
+                        
+                        <!-- Import Actions -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                            <TextBox x:Name="FilePathTextBox" Watermark="Enter audio file path..." Width="180" VerticalAlignment="Center" CornerRadius="8" Background="#1A1C29" BorderBrush="#25273C" Foreground="White"/>
+                            <CheckBox Content="Speaker Diarization" IsChecked="{Binding IsDiarizationEnabled}" Foreground="White" VerticalAlignment="Center" Margin="5,0"/>
+                            <CheckBox Content="Word Alignment" IsChecked="{Binding IsAlignmentEnabled}" Foreground="White" VerticalAlignment="Center" Margin="5,0"/>
+                            <Button Content="Import &amp; Enqueue" Command="{Binding ImportCommand}" CommandParameter="{Binding #FilePathTextBox.Text}" Background="#8B5CF6" Foreground="White" Padding="10,8" CornerRadius="8" FontWeight="SemiBold"/>
+                            <Button Content="⚙" Command="{Binding ToggleSettingsCommand}" ToolTip.Tip="Copilot Settings" Background="#26283C" Foreground="White" Padding="10,8" CornerRadius="8"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Jobs Queue Data Grid -->
+                    <Border Grid.Row="1" Background="#1A1C29" CornerRadius="12" BorderBrush="#25273C" BorderThickness="1" Padding="15">
+                        <Grid RowDefinitions="Auto, *">
+                            <TextBlock Grid.Row="0" Text="Job Queue Tasks" FontSize="14" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,10"/>
+                            
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" RowHeight="45" Background="Transparent">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Job ID" Binding="{Binding Id}" Width="150"/>
+                                    <DataGridTextColumn Header="Media File" Binding="{Binding MediaFile.FilePath}" Width="*"/>
+                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
+                                    <DataGridTextColumn Header="Priority" Binding="{Binding Priority}" Width="80"/>
+                                    <DataGridTextColumn Header="Retries" Binding="{Binding RetryCount}" Width="80"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+
+                    <!-- Bottom Progress & Action Controls -->
+                    <Border Grid.Row="2" Margin="0,20,0,0" Background="#1A1C29" CornerRadius="12" BorderBrush="#25273C" BorderThickness="1" Padding="15">
+                        <Grid ColumnDefinitions="*, Auto">
+                            <!-- Progress Metrics -->
+                            <StackPanel Grid.Column="0" Spacing="10" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding StatusText}" FontSize="13" Foreground="White" FontWeight="SemiBold"/>
+                                <ProgressBar Value="{Binding ProgressPercentage}" Minimum="0" Maximum="100" Height="8" CornerRadius="4" Foreground="#8B5CF6" Background="#26283C" Width="450" HorizontalAlignment="Left"/>
+                            </StackPanel>
+
+                            <!-- Control Actions -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                <Button Content="Pause" Command="{Binding PauseCommand}" Background="#F59E0B" Foreground="White" Padding="15,8" CornerRadius="8"/>
+                                <Button Content="Resume" Command="{Binding ResumeCommand}" Background="#10B981" Foreground="White" Padding="15,8" CornerRadius="8"/>
+                                <Button Content="Cancel" Command="{Binding CancelCommand}" Background="#EF4444" Foreground="White" Padding="15,8" CornerRadius="8"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
                 </Grid>
-            </Border>
+            </TabItem>
 
-            <!-- Bottom Progress & Action Controls -->
-            <Border Grid.Row="2" Margin="0,20,0,0" Background="#1A1C29" CornerRadius="12" BorderBrush="#25273C" BorderThickness="1" Padding="15">
-                <Grid ColumnDefinitions="*, Auto">
-                    <!-- Progress Metrics -->
-                    <StackPanel Grid.Column="0" Spacing="10" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding StatusText}" FontSize="13" Foreground="White" FontWeight="SemiBold"/>
-                        <ProgressBar Value="{Binding ProgressPercentage}" Minimum="0" Maximum="100" Height="8" CornerRadius="4" Foreground="#8B5CF6" Background="#26283C" Width="450" HorizontalAlignment="Left"/>
-                    </StackPanel>
+            <!-- Tab 2: Workspace -->
+            <TabItem Header="Workspace" IsEnabled="{Binding IsWorkspaceEnabled}">
+                <Grid RowDefinitions="Auto, *" Margin="10,20,10,10">
+                    <!-- Speaker Timeline Custom Control -->
+                    <controls:SpeakerTimeline Grid.Row="0"
+                        Height="55"
+                        Margin="0,0,0,15"
+                        Segments="{Binding CurrentSegments}"
+                        CurrentTime="{Binding CurrentTime, Mode=TwoWay}"
+                        Duration="{Binding Duration}"/>
 
-                    <!-- Control Actions -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <Button Content="Pause" Command="{Binding PauseCommand}" Background="#F59E0B" Foreground="White" Padding="15,8" CornerRadius="8"/>
-                        <Button Content="Resume" Command="{Binding ResumeCommand}" Background="#10B981" Foreground="White" Padding="15,8" CornerRadius="8"/>
-                        <Button Content="Cancel" Command="{Binding CancelCommand}" Background="#EF4444" Foreground="White" Padding="15,8" CornerRadius="8"/>
-                    </StackPanel>
+                    <!-- Workspace Detail Panels (Split Editor & Glossary Tags) -->
+                    <Grid Grid.Row="1" ColumnDefinitions="*, 15, 280">
+                        <!-- Transcript Paragraphs List (Left) -->
+                        <Border Grid.Column="0" Background="#1A1C29" CornerRadius="12" BorderBrush="#25273C" BorderThickness="1" Padding="15">
+                            <Grid RowDefinitions="Auto, *">
+                                <TextBlock Grid.Row="0" Text="Transcript Editor" FontSize="14" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,10"/>
+                                <ScrollViewer Grid.Row="1">
+                                    <ItemsControl ItemsSource="{Binding CurrentParagraphs}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border CornerRadius="8" Padding="12" Margin="0,0,0,10" BorderBrush="#25273C" BorderThickness="1">
+                                                    <Border.Styles>
+                                                        <Style Selector="Border">
+                                                            <Setter Property="Background" Value="#151722"/>
+                                                        </Style>
+                                                        <Style Selector="Border[Tag=True]">
+                                                            <Setter Property="Background" Value="#2E234A"/>
+                                                            <Setter Property="BorderBrush" Value="#8B5CF6"/>
+                                                        </Style>
+                                                    </Border.Styles>
+                                                    <Border.Tag>
+                                                        <Binding Path="IsHighlighted"/>
+                                                    </Border.Tag>
+                                                    <Grid ColumnDefinitions="Auto, *">
+                                                        <StackPanel Grid.Column="0" Width="100" Margin="0,0,10,0" Spacing="4">
+                                                            <TextBlock Text="{Binding Speaker}" FontWeight="Bold" Foreground="#8B5CF6" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Text="{Binding TimestampText}" Foreground="#6D7090" FontSize="10"/>
+                                                        </StackPanel>
+                                                        <TextBox Grid.Column="1" Text="{Binding Text, Mode=TwoWay}" TextWrapping="Wrap" Background="Transparent" BorderThickness="0" Foreground="White" FontSize="12" AcceptsReturn="True"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+
+                        <!-- Tag Cloud Sidebar Panel (Right) -->
+                        <Border Grid.Column="2" Background="#1A1C29" CornerRadius="12" BorderBrush="#25273C" BorderThickness="1" Padding="15">
+                            <Grid RowDefinitions="Auto, *">
+                                <TextBlock Grid.Row="0" Text="Domain Glossary Tags" FontSize="14" FontWeight="SemiBold" Foreground="#8B5CF6" Margin="0,0,0,10"/>
+                                <ScrollViewer Grid.Row="1">
+                                    <ItemsControl ItemsSource="{Binding TagCloudItems}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Margin="5"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Content="{Binding Term}"
+                                                        Command="{Binding $parent[Window].DataContext.SelectTagCommand}"
+                                                        CommandParameter="{Binding Term}"
+                                                        FontSize="{Binding FontSize}"
+                                                        Foreground="{Binding ColorHex}"
+                                                        Margin="4"
+                                                        Padding="8,4"
+                                                        CornerRadius="6"
+                                                        ToolTip.Tip="{Binding Count, StringFormat='Occurrences: {0}'}">
+                                                    <Button.Styles>
+                                                        <Style Selector="Button">
+                                                            <Setter Property="Background" Value="#25273C"/>
+                                                        </Style>
+                                                        <Style Selector="Button:hover">
+                                                            <Setter Property="Background" Value="#8B5CF6"/>
+                                                            <Setter Property="Foreground" Value="White"/>
+                                                        </Style>
+                                                    </Button.Styles>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+                    </Grid>
                 </Grid>
-            </Border>
-        </Grid>
+            </TabItem>
+        </TabControl>
 
         <!-- Right Settings Sidebar Panel -->
         <Border Grid.Column="2" Width="260" Background="#1A1C29" BorderBrush="#25273C" BorderThickness="1,0,0,0" IsVisible="{Binding IsSettingsVisible}">

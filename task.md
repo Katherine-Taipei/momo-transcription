@@ -25,9 +25,9 @@ This checklist tracks Phase 3 development items. Mark items as completed as prog
 - [x] Implement streaming transcription loop executing a local Whisper `tiny` model in `int8` on raw incoming PCM chunks
 
 ## P3-5: Speaker Timeline & Tag Cloud UI
-- [ ] Build Speaker Timeline visual component in Avalonia displaying chronologically stacked, colored rectangles mapping speaker durations
-- [ ] Implement click-to-jump timeline playhead binding
-- [ ] Build Keyword Tag Cloud displaying density-scaled terms matching the domain glossary
+- [x] Build Speaker Timeline visual component in Avalonia displaying chronologically stacked, colored rectangles mapping speaker durations
+- [x] Implement click-to-jump timeline playhead binding
+- [x] Build Keyword Tag Cloud displaying density-scaled terms matching the domain glossary
 
 ## P3-6: Test Matrix Consolidation & Release v3.0.0
 - [ ] Add Python and C# integration tests validating Qdrant, PubMed, SEC EDGAR, and Streaming
