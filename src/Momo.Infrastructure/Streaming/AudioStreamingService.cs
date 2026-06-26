@@ -16,6 +16,7 @@ public class AudioStreamingService
     private CancellationTokenSource? _cts;
     private readonly MemoryStream _audioBuffer = new();
     private const int TargetBufferSize = 5 * 16000 * 2; // 5 seconds of 16kHz 16-bit mono = 160,000 bytes
+    private readonly object _lock = new();
 
     public event Action<string>? OnTranscriptReceived;
     public event Action<string>? OnError;
@@ -45,15 +46,48 @@ public class AudioStreamingService
         // Start listening task for transcripts returned from WebSocket
         _ = Task.Run(() => ListenWebSocketAsync(_cts.Token));
 
-        // Configure NAudio WaveIn for 16kHz, 16-bit, Mono PCM
-        _waveIn = new WaveInEvent
+        // Configure NAudio WaveIn for 16kHz, 16-bit, Mono PCM if device is available
+        if (WaveIn.DeviceCount > 0)
         {
-            WaveFormat = new WaveFormat(16000, 16, 1),
-            BufferMilliseconds = 100
-        };
+            try
+            {
+                _waveIn = new WaveInEvent
+                {
+                    WaveFormat = new WaveFormat(16000, 16, 1),
+                    BufferMilliseconds = 100
+                };
 
-        _waveIn.DataAvailable += OnAudioDataAvailable;
-        _waveIn.StartRecording();
+                _waveIn.DataAvailable += OnAudioDataAvailable;
+                _waveIn.StartRecording();
+            }
+            catch (Exception ex)
+            {
+                // Gracefully handle MmException/NoDriver on headless CI/CD systems
+                System.Diagnostics.Debug.WriteLine($"[Warning] NAudio recording failed to start: {ex.Message}");
+                _waveIn = null;
+            }
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine("[Warning] No audio recording devices found. Streaming will rely on mock audio data.");
+        }
+    }
+
+    public void SendMockAudioData(byte[] buffer)
+    {
+        if (_webSocket == null || _webSocket.State != WebSocketState.Open) return;
+
+        lock (_audioBuffer)
+        {
+            _audioBuffer.Write(buffer, 0, buffer.Length);
+
+            if (_audioBuffer.Length >= TargetBufferSize)
+            {
+                byte[] chunk = _audioBuffer.ToArray();
+                _audioBuffer.SetLength(0); // Reset buffer
+                _ = SendAudioChunkAsync(chunk);
+            }
+        }
     }
 
     private void OnAudioDataAvailable(object? sender, WaveInEventArgs e)
@@ -138,23 +172,53 @@ public class AudioStreamingService
 
     public async Task StopStreamingAsync()
     {
-        if (!IsStreaming) return;
+        WaveInEvent? localWaveIn = null;
+        ClientWebSocket? localWS = null;
 
-        _cts?.Cancel();
-
-        if (_waveIn != null)
+        lock (_lock)
         {
-            _waveIn.StopRecording();
-            _waveIn.DataAvailable -= OnAudioDataAvailable;
+            if (!IsStreaming) return;
+            IsStreaming = false;
+            
+            _cts?.Cancel();
+            
+            localWaveIn = _waveIn;
+            _waveIn = null;
+
+            localWS = _webSocket;
+            _webSocket = null;
         }
 
-        if (_webSocket != null && _webSocket.State == WebSocketState.Open)
+        if (localWaveIn != null)
         {
             try
             {
-                await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Stop requested", CancellationToken.None);
+                localWaveIn.StopRecording();
             }
             catch { }
+            try
+            {
+                localWaveIn.DataAvailable -= OnAudioDataAvailable;
+            }
+            catch { }
+            try
+            {
+                localWaveIn.Dispose();
+            }
+            catch { }
+        }
+
+        if (localWS != null)
+        {
+            if (localWS.State == WebSocketState.Open)
+            {
+                try
+                {
+                    await localWS.CloseAsync(WebSocketCloseStatus.NormalClosure, "Stop requested", CancellationToken.None);
+                }
+                catch { }
+            }
+            try { localWS.Dispose(); } catch { }
         }
 
         Cleanup();
@@ -162,16 +226,32 @@ public class AudioStreamingService
 
     private void Cleanup()
     {
-        IsStreaming = false;
-        _waveIn?.Dispose();
-        _waveIn = null;
-        _webSocket?.Dispose();
-        _webSocket = null;
-        _cts?.Dispose();
-        _cts = null;
-        lock (_audioBuffer)
+        lock (_lock)
         {
-            _audioBuffer.SetLength(0);
+            IsStreaming = false;
+            if (_waveIn != null)
+            {
+                try
+                {
+                    _waveIn.Dispose();
+                }
+                catch { }
+                _waveIn = null;
+            }
+            if (_webSocket != null)
+            {
+                try { _webSocket.Dispose(); } catch { }
+                _webSocket = null;
+            }
+            if (_cts != null)
+            {
+                try { _cts.Dispose(); } catch { }
+                _cts = null;
+            }
+            lock (_audioBuffer)
+            {
+                _audioBuffer.SetLength(0);
+            }
         }
     }
 }

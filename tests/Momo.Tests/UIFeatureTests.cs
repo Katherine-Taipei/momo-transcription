@@ -1,8 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Json;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -13,6 +18,7 @@ using Momo.App.Controls;
 using Momo.App.ViewModels;
 using Momo.Core.Entities;
 using Momo.Infrastructure.Db;
+using Momo.Infrastructure.Streaming;
 using Xunit;
 
 namespace Momo.Tests;
@@ -29,10 +35,14 @@ public class UIFeatureTests : IDisposable
 {
     private readonly string _testDbPath;
     private readonly DbContextOptions<AppDbContext> _dbOptions;
+    private readonly string _pythonExe;
+    private readonly string _workerScript;
 
     public UIFeatureTests()
     {
         _testDbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "momo_ui_test.db");
+        _pythonExe = @"d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\.venv\Scripts\python.exe";
+        _workerScript = @"d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py";
 
         if (File.Exists(_testDbPath))
         {
@@ -184,6 +194,261 @@ public class UIFeatureTests : IDisposable
         var highlightedParagraphs = vm.CurrentParagraphs.Where(p => p.IsHighlighted).ToList();
         Assert.NotEmpty(highlightedParagraphs);
         Assert.Contains("terzipatide", highlightedParagraphs.First().Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Test_UI_Flow()
+    {
+        // 1. Seed completed job & transcript
+        using (var context = new AppDbContext(_dbOptions))
+        {
+            var mediaId = "media_flow_123";
+            var mediaFile = new MediaFile
+            {
+                Id = mediaId,
+                ProjectId = "default",
+                FilePath = "flow.wav",
+                FileHash = "hash_flow_123",
+                FileSizeBytes = 1000
+            };
+            context.MediaFiles.Add(mediaFile);
+
+            var job = new Job
+            {
+                Id = "job_flow_123",
+                ProjectId = "default",
+                MediaFileId = mediaId,
+                Status = "COMPLETED",
+                SelectedGlossaries = "[\"medical.json\"]"
+            };
+            context.Jobs.Add(job);
+
+            var transcript = new Transcript
+            {
+                Id = "transcript_flow_123",
+                ProjectId = "default",
+                MediaFileId = mediaId,
+                RawText = "momo transcription using terzipatide."
+            };
+            context.Transcripts.Add(transcript);
+
+            context.TranscriptWords.AddRange(
+                new TranscriptWord { TranscriptId = transcript.Id, Word = "momo", StartTime = 1.0, EndTime = 2.0, SpeakerId = "Speaker_00" },
+                new TranscriptWord { TranscriptId = transcript.Id, Word = "transcription", StartTime = 10.0, EndTime = 12.0, SpeakerId = "Speaker_01" }
+            );
+
+            context.SaveChanges();
+        }
+
+        // 2. Initialize MainViewModel
+        var vm = new MainViewModel(_testDbPath);
+        var jobFromDb = vm.Jobs.FirstOrDefault(j => j.Id == "job_flow_123");
+        Assert.NotNull(jobFromDb);
+        vm.SelectedJob = jobFromDb;
+
+        // 3. Initialize custom control and set up Two-Way Binding
+        var timeline = new TestSpeakerTimeline();
+        timeline.Bind(SpeakerTimeline.CurrentTimeProperty, new Avalonia.Data.Binding("CurrentTime") { Source = vm, Mode = Avalonia.Data.BindingMode.TwoWay });
+        timeline.Bind(SpeakerTimeline.DurationProperty, new Avalonia.Data.Binding("Duration") { Source = vm, Mode = Avalonia.Data.BindingMode.OneWay });
+        timeline.Bind(SpeakerTimeline.SegmentsProperty, new Avalonia.Data.Binding("CurrentSegments") { Source = vm, Mode = Avalonia.Data.BindingMode.OneWay });
+
+        timeline.Measure(new Size(200, 50));
+        timeline.Arrange(new Rect(0, 0, 200, 50));
+
+        // 4. Act: Select tag "Momo" (Tag Cloud Action)
+        vm.SelectTagCommand.Execute("Momo");
+
+        // Assert playhead jumped to 1.0
+        Assert.Equal(1.0, vm.CurrentTime);
+        Assert.Equal(1.0, timeline.CurrentTime);
+
+        // 5. Act: Click on Timeline inside Bob's block (starts at 10.0, ends at 12.0. Center of block X = 183 maps to ~11s, which is inside segment [10, 12])
+        var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+        var pointerPressedArgs = new PointerPressedEventArgs(
+            timeline,
+            pointer,
+            timeline,
+            new Point(183, 25), // X = 183 maps to ~11s, which is inside segment [10, 12]
+            0,
+            new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.LeftButtonPressed),
+            KeyModifiers.None
+        );
+        timeline.SimulatePointerPressed(pointerPressedArgs);
+
+        // Assert playhead snapped to start of segment block: 10.0s
+        Assert.Equal(10.0, timeline.CurrentTime);
+        Assert.Equal(10.0, vm.CurrentTime);
+    }
+
+    [Fact]
+    public async Task Test_RAG_EndToEnd()
+    {
+        int port = FindFreeTcpPort();
+        string token = "test_rag_token";
+
+        // Spawn Python worker
+        var arguments = $"\"{_workerScript}\" --port {port} --db \"{_testDbPath}\" --token \"{token}\"";
+        var psi = new ProcessStartInfo
+        {
+            FileName = _pythonExe,
+            Arguments = arguments,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = Path.GetDirectoryName(_workerScript) ?? string.Empty
+        };
+
+        var process = Process.Start(psi);
+        Assert.NotNull(process);
+
+        try
+        {
+            // Connect and verify using retry loop
+            using var client = new HttpClient();
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            bool connected = false;
+            for (int i = 0; i < 20; i++)
+            {
+                try
+                {
+                    var res = await client.GetAsync($"http://127.0.0.1:{port}/docs");
+                    if (res.IsSuccessStatusCode)
+                    {
+                        connected = true;
+                        break;
+                    }
+                }
+                catch
+                {
+                    await Task.Delay(1000);
+                }
+            }
+            Assert.True(connected, "Failed to connect to the Python RAG server.");
+
+            // Ingest Paragraphs in IngestRequest format
+            var ingestPayload = new
+            {
+                project_id = "test_rag_proj",
+                media_file_id = "tr_e2e_1",
+                segments = new[]
+                {
+                    new
+                    {
+                        start = 10.0,
+                        end = 25.0,
+                        text = "Tirzepatide is a novel treatment developed by Eli Lilly.",
+                        speaker = "Speaker_00"
+                    }
+                }
+            };
+
+            var ingestRes = await client.PostAsJsonAsync($"http://127.0.0.1:{port}/rag/ingest", ingestPayload);
+            Assert.Equal(HttpStatusCode.OK, ingestRes.StatusCode);
+
+            // Query RAG report
+            var queryPayload = new
+            {
+                project_id = "test_rag_proj",
+                query = "Who developed Tirzepatide?",
+                limit = 5
+            };
+
+            var queryRes = await client.PostAsJsonAsync($"http://127.0.0.1:{port}/rag/query", queryPayload);
+            Assert.Equal(HttpStatusCode.OK, queryRes.StatusCode);
+
+            string responseContent = await queryRes.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(responseContent);
+            Assert.True(doc.RootElement.TryGetProperty("report", out var reportProp));
+            string report = reportProp.GetString() ?? "";
+            Assert.NotEmpty(report);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+            }
+            process.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Test_Streaming_EndToEnd()
+    {
+        int port = FindFreeTcpPort();
+        string token = "test_stream_token";
+
+        // Spawn Python worker
+        var arguments = $"\"{_workerScript}\" --port {port} --db \"{_testDbPath}\" --token \"{token}\"";
+        var psi = new ProcessStartInfo
+        {
+            FileName = _pythonExe,
+            Arguments = arguments,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = Path.GetDirectoryName(_workerScript) ?? string.Empty
+        };
+
+        var process = Process.Start(psi);
+        Assert.NotNull(process);
+
+        try
+        {
+            var wsUrl = $"ws://127.0.0.1:{port}/ws/live-stream?token={token}";
+            var streamService = new AudioStreamingService();
+
+            var tcs = new TaskCompletionSource<string>();
+            streamService.OnTranscriptReceived += text => tcs.TrySetResult(text);
+
+            // Connect using retry loop
+            bool connected = false;
+            for (int i = 0; i < 20; i++)
+            {
+                try
+                {
+                    await streamService.StartStreamingAsync(wsUrl);
+                    if (streamService.IsStreaming)
+                    {
+                        connected = true;
+                        break;
+                    }
+                }
+                catch
+                {
+                    await Task.Delay(1000);
+                }
+            }
+            Assert.True(connected, "AudioStreamingService failed to connect to WebSocket server.");
+
+            // Send 5 seconds of mock PCM silence (160,000 bytes)
+            byte[] mockPcmData = new byte[160000];
+            streamService.SendMockAudioData(mockPcmData);
+
+            // Wait for partial transcript
+            var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(25000));
+            Assert.Same(tcs.Task, completedTask);
+
+            string transcript = tcs.Task.Result;
+            Assert.NotNull(transcript);
+
+            await streamService.StopStreamingAsync();
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+            }
+            process.Dispose();
+        }
+    }
+
+    private static int FindFreeTcpPort()
+    {
+        using var socket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        return ((IPEndPoint)socket.LocalEndPoint!).Port;
     }
 
     public void Dispose()
