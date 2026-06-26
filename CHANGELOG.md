@@ -2,6 +2,26 @@
 
 All notable changes to the Momo Transcription Platform will be documented in this file.
 
+## [3.0.0] - 2026-06-26
+
+### Phase 3: RAG Orchestrator, Live Streaming, and Advanced UI Controls
+
+This release completes Phase 3 of the Momo Transcription Platform, integrating hybrid vector search, external reference retrieval, real-time audio websocket streaming, and interactive timeline & tag cloud analysis controls.
+
+### Added
+- **Qdrant Vector Database Integration**: Added docker-compose settings and implemented Qdrant API client for indexing and vector similarity search.
+- **PubMed & SEC EDGAR Providers**: Built provider clients with built-in rate-limiting, retry policies, and custom User-Agents to query PubMed publications and SEC corporate filings.
+- **Hybrid Query Router & Prompt Builder**: Implemented reciprocal rank fusion (RRF) to merge BM25 keyword and Qdrant vector results, dynamically constructing contextual prompts with transcriptions and external research findings.
+- **WebSocket Streaming Transcription**: Added `/ws/live-stream` endpoint in Python worker for real-time 16-bit 16kHz mono PCM transcription via Whisper tiny-int8 and integrated C# `AudioStreamingService`.
+- **Interactive Speaker Timeline**: Created custom Avalonia control `SpeakerTimeline` displaying speaker turn segments as color-coded blocks, supporting click-to-jump playhead snapping.
+- **Glossary-driven Tag Cloud**: Implemented TF-IDF tag analyzer scaling tag fonts and colors, highlighting corresponding paragraphs and seeking audio position on click.
+- **End-to-End Testing Matrix**: Added `Test_RAG_EndToEnd`, `Test_Streaming_EndToEnd`, and `Test_UI_Flow` tests, implementing headless environment audio device check optimizations and sequential execution controls.
+
+### Fixed
+- Fixed unmanaged `AccessViolationException` crashes caused by concurrent NAudio resource disposal on different threads by implementing class-level lock synchronization.
+- Fixed `NullReferenceException` crashes in NAudio waveIn stop/dispose by skipping `WaveInEvent` initialization when `WaveIn.DeviceCount == 0` on headless servers.
+- Fixed test hang and performance overhead by implementing a short-circuit threshold detector in Python streaming server to immediately return `"silence"` for low-energy audio.
+
 ## [2.0.0] - 2026-06-22
 
 ### Phase 2: VC Research Copilot

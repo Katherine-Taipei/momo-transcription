@@ -4,8 +4,8 @@ Momo is a high-performance, enterprise-grade audio transcription, speaker diariz
 
 ---
 
-## Current Release: Phase 2 (v2.0.0, 2026-06-22)
-This release implements **VC Research Copilot** upgrades including dynamic domain glossaries, cross-file database speaker voiceprint memory, Stubble.Core Mustache template compilation, and the right-hand Avalonia settings panel.
+## Current Release: Phase 3 (v3.0.0, 2026-06-26)
+This release marks the completion of **Phase 3 (RAG Orchestrator, Live Streaming, and Advanced UI Controls)**. It integrates Qdrant vector hybrid search, PubMed and SEC external provider clients, real-time WebSocket PCM audio streaming, and advanced interactive custom controls (Speaker Timeline & Glossary Tag Cloud) in Avalonia UI.
 
 *   For a complete list of updates, see [CHANGELOG.md](file:///d:/Antigravity/Project%203_Enterprise%20Momo/CHANGELOG.md).
 *   For detailed verification results and implementation walkthrough, see [walkthrough.md](file:///C:/Users/User/.gemini/antigravity-ide/brain/c797f12e-b800-48cf-8be7-d1a4c090332c/walkthrough.md).
