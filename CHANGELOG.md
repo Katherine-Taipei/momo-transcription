@@ -2,6 +2,20 @@
 
 All notable changes to the Momo Transcription Platform will be documented in this file.
 
+## [4.0.0-alpha1] - 2026-06-26
+
+### Phase 4: Collaboration & Versioning (Milestone P4-1)
+
+This release kicks off Phase 4, introducing real-time multi-client text editing synchronization and collaborative cursor presence.
+
+### Added
+- **SignalR CollabHub Server**: Integrated ASP.NET Core SignalR and built `CollabHub` handling real-time editing rooms, user presence notifications, cursor updates, and broadcast routing.
+- **In-process Web Host**: Implemented `CollabServerHost` to host the SignalR Hub inside the C# process using Kestrel on port 5192.
+- **Operational Transform (OT) Engine**: Built `OtEngine` supporting concurrency transforms for insert and delete deltas on individual paragraphs to guarantee multi-client document convergence.
+- **Real-time Collaboration Client**: Implemented `CollabClient` using ASP.NET Core SignalR Client to sync paragraph edits, caret cursor movements, and presence lists.
+- **UI Cursor Presence**: Added visual text highlights/labels in Avalonia `MainWindow` to show the presence and cursor focus of other active editors in the paragraphs panel.
+- **OT Concurrency Test**: Added `Test_OT_Sync_TwoClients` integration test validating index shifting and text convergence correctness during concurrent edits.
+
 ## [3.0.0] - 2026-06-26
 
 ### Phase 3: RAG Orchestrator, Live Streaming, and Advanced UI Controls
