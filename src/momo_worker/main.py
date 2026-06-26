@@ -404,8 +404,8 @@ async def live_stream_websocket(websocket: WebSocket, token: str):
             audio_buffer.extend(data)
             
             # 16kHz, 16-bit mono PCM = 32000 bytes per second.
-            # Chunk transcription at 10 seconds of accumulated audio = 320,000 bytes.
-            target_bytes = 320000 
+            # Chunk transcription at 5 seconds of accumulated audio = 160,000 bytes.
+            target_bytes = 160000 
             if len(audio_buffer) >= target_bytes:
                 chunk_bytes = bytes(audio_buffer[:target_bytes])
                 audio_buffer = audio_buffer[target_bytes:]
