@@ -147,7 +147,12 @@
                                                             <TextBlock Text="{Binding Speaker}" FontWeight="Bold" Foreground="#8B5CF6" FontSize="11" TextTrimming="CharacterEllipsis"/>
                                                             <TextBlock Text="{Binding TimestampText}" Foreground="#6D7090" FontSize="10"/>
                                                         </StackPanel>
-                                                        <TextBox Grid.Column="1" Text="{Binding Text, Mode=TwoWay}" TextWrapping="Wrap" Background="Transparent" BorderThickness="0" Foreground="White" FontSize="12" AcceptsReturn="True"/>
+                                                        <StackPanel Grid.Column="1" Spacing="4">
+                                                            <TextBox Text="{Binding Text, Mode=TwoWay}" TextWrapping="Wrap" Background="Transparent" BorderThickness="0" Foreground="White" FontSize="12" AcceptsReturn="True"
+                                                                     KeyUp="TextBox_KeyUp"
+                                                                     PointerReleased="TextBox_PointerReleased"/>
+                                                            <TextBlock Text="{Binding PresenceText}" Foreground="#34D399" FontSize="10" FontWeight="SemiBold"/>
+                                                        </StackPanel>
                                                     </Grid>
                                                 </Border>
                                             </DataTemplate>

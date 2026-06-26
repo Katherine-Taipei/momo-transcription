@@ -18,6 +18,7 @@ using Momo.Infrastructure.Db;
 using Momo.Infrastructure.Exporters;
 using Momo.Infrastructure.Queue;
 using Momo.Infrastructure.Subprocesses;
+using Momo.Infrastructure.Collab;
 using ReactiveUI;
 
 namespace Momo.App.ViewModels;
@@ -36,16 +37,122 @@ public class GlossaryItem : ViewModelBase
 public class ParagraphViewModel : ViewModelBase
 {
     private bool _isHighlighted;
+    private string _text = string.Empty;
+    private string _presenceText = string.Empty;
+    private bool _isApplyingRemoteChange;
+
     public string Speaker { get; set; } = string.Empty;
     public double StartTime { get; set; }
     public double EndTime { get; set; }
-    public string Text { get; set; } = string.Empty;
     public string TimestampText { get; set; } = string.Empty;
+
+    public event Action<ParagraphViewModel, string, int, string>? OnLocalEdit;
 
     public bool IsHighlighted
     {
         get => _isHighlighted;
         set => this.RaiseAndSetIfChanged(ref _isHighlighted, value);
+    }
+
+    public string PresenceText
+    {
+        get => _presenceText;
+        set => this.RaiseAndSetIfChanged(ref _presenceText, value);
+    }
+
+    public string Text
+    {
+        get => _text;
+        set
+        {
+            if (_text != value)
+            {
+                string oldText = _text;
+                this.RaiseAndSetIfChanged(ref _text, value);
+                OnTextChanged(oldText, value);
+            }
+        }
+    }
+
+    public void SetTextFromRemote(string newText)
+    {
+        _isApplyingRemoteChange = true;
+        try
+        {
+            Text = newText;
+        }
+        finally
+        {
+            _isApplyingRemoteChange = false;
+        }
+    }
+
+    private void OnTextChanged(string oldText, string newText)
+    {
+        if (_isApplyingRemoteChange) return;
+
+        var (type, position, diffText) = DiffStrings(oldText, newText);
+        if (type != "noop")
+        {
+            OnLocalEdit?.Invoke(this, type, position, diffText);
+        }
+    }
+
+    private static (string type, int position, string text) DiffStrings(string oldStr, string newStr)
+    {
+        oldStr ??= string.Empty;
+        newStr ??= string.Empty;
+        if (oldStr == newStr) return ("noop", 0, string.Empty);
+
+        int start = 0;
+        while (start < oldStr.Length && start < newStr.Length && oldStr[start] == newStr[start])
+        {
+            start++;
+        }
+
+        int oldEnd = oldStr.Length - 1;
+        int newEnd = newStr.Length - 1;
+        while (oldEnd >= start && newEnd >= start && oldStr[oldEnd] == newStr[newEnd])
+        {
+            oldEnd--;
+            newEnd--;
+        }
+
+        if (newEnd >= start)
+        {
+            string insertedText = newStr.Substring(start, newEnd - start + 1);
+            return ("insert", start, insertedText);
+        }
+        else
+        {
+            string deletedText = oldStr.Substring(start, oldEnd - start + 1);
+            return ("delete", start, deletedText);
+        }
+    }
+}
+
+public class UserCursorViewModel : ViewModelBase
+{
+    private string _userId = string.Empty;
+    private int _paragraphIndex;
+    private int _charOffset;
+
+    public string UserId
+    {
+        get => _userId;
+        set => this.RaiseAndSetIfChanged(ref _userId, value);
+    }
+
+    public int ParagraphIndex
+    {
+        get => _paragraphIndex;
+        set => this.RaiseAndSetIfChanged(ref _paragraphIndex, value);
+    }
+
+    public int CharOffset
+    {
+        get => _charOffset;
+        set => this.RaiseAndSetIfChanged(ref _charOffset, value);
     }
 }
 
@@ -172,6 +279,20 @@ public class MainViewModel : ViewModelBase
         get => _selectedTag;
         set => this.RaiseAndSetIfChanged(ref _selectedTag, value);
     }
+
+    private CollabClient? _collabClient;
+    private string _userId = "User_" + Guid.NewGuid().ToString().Substring(0, 4);
+    private string? _activeTranscriptId;
+    private int _serverRevision = 0;
+    private readonly List<OtOperation> _pendingOperations = new();
+
+    public string UserId
+    {
+        get => _userId;
+        set => this.RaiseAndSetIfChanged(ref _userId, value);
+    }
+
+    public ObservableCollection<UserCursorViewModel> OtherUsersCursors { get; } = new();
 
     public ObservableCollection<Job> Jobs { get; } = new();
     public ObservableCollection<GlossaryItem> GlossaryOptions { get; } = new();
@@ -539,6 +660,7 @@ public class MainViewModel : ViewModelBase
             TagCloudItems.Clear();
             Duration = 0.0;
             CurrentTime = 0.0;
+            _ = DisconnectCollabAsync();
             return;
         }
 
@@ -553,6 +675,7 @@ public class MainViewModel : ViewModelBase
             TagCloudItems.Clear();
             Duration = 0.0;
             CurrentTime = 0.0;
+            _ = DisconnectCollabAsync();
             return;
         }
 
@@ -568,6 +691,7 @@ public class MainViewModel : ViewModelBase
             TagCloudItems.Clear();
             Duration = 0.0;
             CurrentTime = 0.0;
+            _ = DisconnectCollabAsync();
             return;
         }
 
@@ -587,7 +711,7 @@ public class MainViewModel : ViewModelBase
                 dispSpeaker = mappedName;
             }
 
-            CurrentParagraphs.Add(new ParagraphViewModel
+            var pvm = new ParagraphViewModel
             {
                 Speaker = dispSpeaker,
                 StartTime = rp.StartTime,
@@ -595,7 +719,9 @@ public class MainViewModel : ViewModelBase
                 Text = rp.Text,
                 TimestampText = FormatTime(rp.StartTime),
                 IsHighlighted = false
-            });
+            };
+            pvm.OnLocalEdit += HandleLocalParagraphEdit;
+            CurrentParagraphs.Add(pvm);
         }
 
         CurrentSegments.Clear();
@@ -619,6 +745,9 @@ public class MainViewModel : ViewModelBase
         BuildTagCloud(job, rawParagraphs, context);
         
         SelectedTabIndex = 1;
+
+        _activeTranscriptId = transcript.Id;
+        _ = StartCollabConnectionAsync(_activeTranscriptId);
     }
 
     private void BuildTagCloud(Job job, List<ParagraphBuilder.ParagraphItem> rawParagraphs, AppDbContext context)
@@ -757,5 +886,154 @@ public class MainViewModel : ViewModelBase
     {
         var ts = TimeSpan.FromSeconds(seconds);
         return $"{ts.Hours:D2}:{ts.Minutes:D2}:{ts.Seconds:D2}";
+    }
+
+    private async Task StartCollabConnectionAsync(string transcriptId)
+    {
+        await DisconnectCollabAsync();
+
+        _serverRevision = 0;
+        _pendingOperations.Clear();
+        OtherUsersCursors.Clear();
+
+        // Connect to local in-process SignalR Hub running on port 5192
+        _collabClient = new CollabClient("http://localhost:5192/hubs/collab");
+
+        _collabClient.OnUserJoined += uid =>
+        {
+            StatusText = $"User {uid} joined the workspace.";
+        };
+
+        _collabClient.OnCursorReceived += (uid, pIdx, offset) =>
+        {
+            var cursor = OtherUsersCursors.FirstOrDefault(c => c.UserId == uid);
+            if (cursor == null)
+            {
+                cursor = new UserCursorViewModel { UserId = uid };
+                OtherUsersCursors.Add(cursor);
+            }
+            cursor.ParagraphIndex = pIdx;
+            cursor.CharOffset = offset;
+
+            UpdatePresenceText(pIdx);
+        };
+
+        _collabClient.OnOperationReceived += op =>
+        {
+            if (op.ClientId == UserId) return;
+
+            // Transform remote op against our local pending operations
+            lock (_pendingOperations)
+            {
+                for (int i = 0; i < _pendingOperations.Count; i++)
+                {
+                    var (transformedRemote, transformedLocal) = OtEngine.Transform(op, _pendingOperations[i]);
+                    op = transformedRemote;
+                    _pendingOperations[i] = transformedLocal;
+                }
+            }
+
+            if (op.ParagraphIndex >= 0 && op.ParagraphIndex < CurrentParagraphs.Count)
+            {
+                var p = CurrentParagraphs[op.ParagraphIndex];
+                string newText = OtEngine.Apply(p.Text, op);
+                p.SetTextFromRemote(newText);
+            }
+
+            _serverRevision = op.Revision + 1;
+        };
+
+        _collabClient.OnOperationConfirmed += op =>
+        {
+            lock (_pendingOperations)
+            {
+                if (_pendingOperations.Count > 0)
+                {
+                    _pendingOperations.RemoveAt(0);
+                }
+            }
+            _serverRevision = op.Revision + 1;
+        };
+
+        try
+        {
+            await _collabClient.StartAsync();
+            await _collabClient.JoinGroupAsync(transcriptId, UserId);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Warning] Collaboration sync failed: {ex.Message}");
+        }
+    }
+
+    private void UpdatePresenceText(int paragraphIndex)
+    {
+        if (paragraphIndex < 0 || paragraphIndex >= CurrentParagraphs.Count) return;
+
+        var usersHere = OtherUsersCursors
+            .Where(c => c.ParagraphIndex == paragraphIndex)
+            .Select(c => c.UserId)
+            .ToList();
+
+        if (usersHere.Count > 0)
+        {
+            CurrentParagraphs[paragraphIndex].PresenceText = $"{string.Join(", ", usersHere)} is here";
+        }
+        else
+        {
+            CurrentParagraphs[paragraphIndex].PresenceText = string.Empty;
+        }
+    }
+
+    private void HandleLocalParagraphEdit(ParagraphViewModel pvm, string type, int position, string text)
+    {
+        if (_collabClient == null || string.IsNullOrEmpty(_activeTranscriptId)) return;
+
+        int pIdx = CurrentParagraphs.IndexOf(pvm);
+        if (pIdx < 0) return;
+
+        var op = new OtOperation
+        {
+            ClientId = UserId,
+            Type = type,
+            Position = position,
+            Text = text,
+            ParagraphIndex = pIdx,
+            Revision = _serverRevision
+        };
+
+        lock (_pendingOperations)
+        {
+            _pendingOperations.Add(op);
+        }
+
+        _ = _collabClient.SubmitOperationAsync(_activeTranscriptId, op);
+    }
+
+    public void SubmitLocalCursor(ParagraphViewModel pvm, int charOffset)
+    {
+        if (_collabClient == null || string.IsNullOrEmpty(_activeTranscriptId)) return;
+
+        int pIdx = CurrentParagraphs.IndexOf(pvm);
+        if (pIdx < 0) return;
+
+        _ = _collabClient.SubmitCursorAsync(_activeTranscriptId, UserId, pIdx, charOffset);
+    }
+
+    private async Task DisconnectCollabAsync()
+    {
+        if (_collabClient != null)
+        {
+            try
+            {
+                await _collabClient.StopAsync();
+            }
+            catch { }
+            _collabClient = null;
+        }
+        _activeTranscriptId = null;
+        _serverRevision = 0;
+        _pendingOperations.Clear();
+        OtherUsersCursors.Clear();
     }
 }
