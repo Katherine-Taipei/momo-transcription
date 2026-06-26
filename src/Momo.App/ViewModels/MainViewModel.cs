@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -9,8 +10,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
+using Momo.App.Controls;
 using Momo.Core.Entities;
 using Momo.Core.Interfaces;
+using Momo.Infrastructure;
 using Momo.Infrastructure.Db;
 using Momo.Infrastructure.Exporters;
 using Momo.Infrastructure.Queue;
@@ -30,6 +33,40 @@ public class GlossaryItem : ViewModelBase
     }
 }
 
+public class ParagraphViewModel : ViewModelBase
+{
+    private bool _isHighlighted;
+    public string Speaker { get; set; } = string.Empty;
+    public double StartTime { get; set; }
+    public double EndTime { get; set; }
+    public string Text { get; set; } = string.Empty;
+    public string TimestampText { get; set; } = string.Empty;
+
+    public bool IsHighlighted
+    {
+        get => _isHighlighted;
+        set => this.RaiseAndSetIfChanged(ref _isHighlighted, value);
+    }
+}
+
+public class TagItem : ViewModelBase
+{
+    public string Term { get; set; } = string.Empty;
+    public double Score { get; set; }
+    public double Weight { get; set; }
+    public int Count { get; set; }
+    public double FontSize => 12.0 + 10.0 * Weight;
+    public string ColorHex => GetColorForWeight(Weight);
+
+    private static string GetColorForWeight(double w)
+    {
+        if (w > 0.75) return "#C084FC"; // bright violet
+        if (w > 0.45) return "#A78BFA"; // light purple
+        if (w > 0.2) return "#818CF8";  // indigo
+        return "#9CA3AF";               // gray
+    }
+}
+
 public class MainViewModel : ViewModelBase
 {
     private readonly DbContextOptions<AppDbContext> _dbOptions;
@@ -37,6 +74,7 @@ public class MainViewModel : ViewModelBase
     private readonly ISubprocessHost _subprocessHost;
     private readonly string _dbPath;
     private readonly string _pythonScriptPath;
+    private readonly Dictionary<string, string> _glossaryTerms = new(StringComparer.OrdinalIgnoreCase);
 
     private string _statusText = "Ready";
     private double _progressPercentage = 0;
@@ -57,7 +95,11 @@ public class MainViewModel : ViewModelBase
     public Job? SelectedJob
     {
         get => _selectedJob;
-        set => this.RaiseAndSetIfChanged(ref _selectedJob, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedJob, value);
+            OnSelectedJobChanged(value);
+        }
     }
 
     private bool _isDiarizationEnabled = true;
@@ -96,20 +138,64 @@ public class MainViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _selectedTemplate, value);
     }
 
+    private double _currentTime;
+    public double CurrentTime
+    {
+        get => _currentTime;
+        set => this.RaiseAndSetIfChanged(ref _currentTime, value);
+    }
+
+    private double _duration;
+    public double Duration
+    {
+        get => _duration;
+        set => this.RaiseAndSetIfChanged(ref _duration, value);
+    }
+
+    private bool _isWorkspaceEnabled;
+    public bool IsWorkspaceEnabled
+    {
+        get => _isWorkspaceEnabled;
+        set => this.RaiseAndSetIfChanged(ref _isWorkspaceEnabled, value);
+    }
+
+    private int _selectedTabIndex;
+    public int SelectedTabIndex
+    {
+        get => _selectedTabIndex;
+        set => this.RaiseAndSetIfChanged(ref _selectedTabIndex, value);
+    }
+
+    private string? _selectedTag;
+    public string? SelectedTag
+    {
+        get => _selectedTag;
+        set => this.RaiseAndSetIfChanged(ref _selectedTag, value);
+    }
+
     public ObservableCollection<Job> Jobs { get; } = new();
     public ObservableCollection<GlossaryItem> GlossaryOptions { get; } = new();
     public ObservableCollection<string> RoleOptions { get; } = new();
     public ObservableCollection<string> TemplateOptions { get; } = new();
+
+    public ObservableCollection<ParagraphViewModel> CurrentParagraphs { get; } = new();
+    public ObservableCollection<TimelineSegment> CurrentSegments { get; } = new();
+    public ObservableCollection<TagItem> TagCloudItems { get; } = new();
 
     public ICommand ImportCommand { get; }
     public ICommand PauseCommand { get; }
     public ICommand ResumeCommand { get; }
     public ICommand CancelCommand { get; }
     public ICommand ToggleSettingsCommand { get; }
+    public ICommand SelectTagCommand { get; }
 
-    public MainViewModel()
+    public MainViewModel() : this(@"d:\Antigravity\Project 3_Enterprise Momo\momo.db")
     {
-        _dbPath = @"d:\Antigravity\Project 3_Enterprise Momo\momo.db";
+    }
+
+    public MainViewModel(string dbPath)
+    {
+        _dbPath = dbPath;
         _pythonScriptPath = @"d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py";
 
         var builder = new DbContextOptionsBuilder<AppDbContext>();
@@ -137,6 +223,7 @@ public class MainViewModel : ViewModelBase
         ResumeCommand = ReactiveCommand.CreateFromTask(ResumeJobAsync);
         CancelCommand = ReactiveCommand.CreateFromTask(CancelJobAsync);
         ToggleSettingsCommand = ReactiveCommand.Create(() => { IsSettingsVisible = !IsSettingsVisible; });
+        SelectTagCommand = ReactiveCommand.Create<string>(SelectTag);
 
         // Seed configurations folder structures & options
         SeedConfigurations();
@@ -440,5 +527,235 @@ public class MainViewModel : ViewModelBase
             var job = await context.Jobs.FindAsync(jobId);
             return job?.Status == "COMPLETED";
         }
+    }
+
+    private void OnSelectedJobChanged(Job? job)
+    {
+        if (job == null || job.Status != "COMPLETED")
+        {
+            IsWorkspaceEnabled = false;
+            CurrentParagraphs.Clear();
+            CurrentSegments.Clear();
+            TagCloudItems.Clear();
+            Duration = 0.0;
+            CurrentTime = 0.0;
+            return;
+        }
+
+        IsWorkspaceEnabled = true;
+        
+        using var context = new AppDbContext(_dbOptions);
+        var transcript = context.Transcripts.FirstOrDefault(t => t.MediaFileId == job.MediaFileId);
+        if (transcript == null)
+        {
+            CurrentParagraphs.Clear();
+            CurrentSegments.Clear();
+            TagCloudItems.Clear();
+            Duration = 0.0;
+            CurrentTime = 0.0;
+            return;
+        }
+
+        var words = context.TranscriptWords
+            .Where(w => w.TranscriptId == transcript.Id)
+            .OrderBy(w => w.StartTime)
+            .ToList();
+
+        if (words.Count == 0)
+        {
+            CurrentParagraphs.Clear();
+            CurrentSegments.Clear();
+            TagCloudItems.Clear();
+            Duration = 0.0;
+            CurrentTime = 0.0;
+            return;
+        }
+
+        Duration = words.Max(w => w.EndTime);
+        CurrentTime = 0.0;
+
+        var rawParagraphs = ParagraphBuilder.BuildFromWords(words);
+        var profiles = context.SpeakerProfiles.ToList();
+        var profileMap = profiles.ToDictionary(p => p.Id, p => p.DisplayName, StringComparer.OrdinalIgnoreCase);
+
+        CurrentParagraphs.Clear();
+        foreach (var rp in rawParagraphs)
+        {
+            string dispSpeaker = rp.Speaker;
+            if (profileMap.TryGetValue(rp.Speaker, out var mappedName))
+            {
+                dispSpeaker = mappedName;
+            }
+
+            CurrentParagraphs.Add(new ParagraphViewModel
+            {
+                Speaker = dispSpeaker,
+                StartTime = rp.StartTime,
+                EndTime = rp.EndTime,
+                Text = rp.Text,
+                TimestampText = FormatTime(rp.StartTime),
+                IsHighlighted = false
+            });
+        }
+
+        CurrentSegments.Clear();
+        foreach (var rp in rawParagraphs)
+        {
+            string dispSpeaker = rp.Speaker;
+            if (profileMap.TryGetValue(rp.Speaker, out var mappedName))
+            {
+                dispSpeaker = mappedName;
+            }
+
+            CurrentSegments.Add(new TimelineSegment
+            {
+                SpeakerId = rp.Speaker,
+                DisplayName = dispSpeaker,
+                StartTime = rp.StartTime,
+                EndTime = rp.EndTime
+            });
+        }
+
+        BuildTagCloud(job, rawParagraphs, context);
+        
+        SelectedTabIndex = 1;
+    }
+
+    private void BuildTagCloud(Job job, List<ParagraphBuilder.ParagraphItem> rawParagraphs, AppDbContext context)
+    {
+        TagCloudItems.Clear();
+        _glossaryTerms.Clear();
+
+        List<string> glossaryFiles = new();
+        if (!string.IsNullOrEmpty(job.SelectedGlossaries))
+        {
+            try
+            {
+                glossaryFiles = JsonSerializer.Deserialize<List<string>>(job.SelectedGlossaries) ?? new List<string>();
+            }
+            catch { }
+        }
+
+        var baseDir = @"d:\Antigravity\Project 3_Enterprise Momo";
+        var glossariesDir = Path.Combine(baseDir, "glossaries");
+        var termsToMatch = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var gName in glossaryFiles)
+        {
+            var filePath = Path.Combine(glossariesDir, gName);
+            if (File.Exists(filePath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(filePath);
+                    var items = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                    if (items != null)
+                    {
+                        foreach (var kvp in items)
+                        {
+                            termsToMatch[kvp.Key] = kvp.Value;
+                            _glossaryTerms[kvp.Key] = kvp.Value;
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+
+        if (termsToMatch.Count == 0) return;
+
+        string combinedText = string.Join(" ", rawParagraphs.Select(p => p.Text));
+        
+        int totalWords = combinedText.Split(new[] { ' ', '\r', '\n', '\t', '。', '，', '！', '？', '.', ',', '!', '?' }, StringSplitOptions.RemoveEmptyEntries).Length;
+        totalWords = Math.Max(1, totalWords);
+
+        int totalTranscripts = context.Transcripts.Count();
+
+        var computedTags = new List<TagItem>();
+        foreach (var kvp in termsToMatch)
+        {
+            string term = kvp.Key;
+            string normalized = kvp.Value;
+
+            int count = CountOccurrences(combinedText, term);
+            if (count > 0)
+            {
+                double tf = (double)count / totalWords;
+
+                double idf = 1.0;
+                if (totalTranscripts > 1)
+                {
+                    int df = context.Transcripts.AsEnumerable().Count(tr => tr.RawText.Contains(term, StringComparison.OrdinalIgnoreCase));
+                    idf = Math.Max(0.1, Math.Log((double)totalTranscripts / (1.0 + df)));
+                }
+
+                double score = tf * idf * 1000.0;
+
+                computedTags.Add(new TagItem
+                {
+                    Term = normalized,
+                    Score = score,
+                    Count = count
+                });
+            }
+        }
+
+        if (computedTags.Count == 0) return;
+
+        double maxScore = computedTags.Max(t => t.Score);
+        double minScore = computedTags.Min(t => t.Score);
+
+        foreach (var tag in computedTags)
+        {
+            tag.Weight = (maxScore == minScore) ? 0.5 : (tag.Score - minScore) / (maxScore - minScore);
+            TagCloudItems.Add(tag);
+        }
+    }
+
+    private static int CountOccurrences(string source, string term)
+    {
+        if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(term)) return 0;
+        int count = 0;
+        int index = 0;
+        while ((index = source.IndexOf(term, index, StringComparison.OrdinalIgnoreCase)) != -1)
+        {
+            count++;
+            index += term.Length;
+        }
+        return count;
+    }
+
+    private void SelectTag(string term)
+    {
+        SelectedTag = term;
+        
+        var matchingKeys = _glossaryTerms
+            .Where(kvp => kvp.Value.Equals(term, StringComparison.OrdinalIgnoreCase))
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        ParagraphViewModel? firstMatch = null;
+        foreach (var p in CurrentParagraphs)
+        {
+            bool hasTerm = p.Text.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                           matchingKeys.Any(k => p.Text.Contains(k, StringComparison.OrdinalIgnoreCase));
+            
+            p.IsHighlighted = hasTerm;
+            if (hasTerm && firstMatch == null)
+            {
+                firstMatch = p;
+            }
+        }
+
+        if (firstMatch != null)
+        {
+            CurrentTime = firstMatch.StartTime;
+        }
+    }
+
+    private static string FormatTime(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return $"{ts.Hours:D2}:{ts.Minutes:D2}:{ts.Seconds:D2}";
     }
 }

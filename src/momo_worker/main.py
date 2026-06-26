@@ -43,13 +43,21 @@ from pipeline.vad_processor import VadProcessor
 from pipeline.diarizer import Diarizer
 from pipeline.transcript_master import TranscriptMaster
 from pipeline.glossary_processor import GlossaryProcessor
+from pipeline.rag_orchestrator import RagOrchestrator
+from pipeline.streaming_server import StreamingProcessor
 
 # Argument parsing
+is_testing = "unittest" in sys.argv[0] or any("unittest" in arg for arg in sys.argv)
 parser = argparse.ArgumentParser()
 parser.add_argument("--port", type=int, default=5000)
-parser.add_argument("--db", type=str, required=True)
-parser.add_argument("--token", type=str, required=True)
+parser.add_argument("--db", type=str, required=not is_testing)
+parser.add_argument("--token", type=str, required=not is_testing)
 args, unknown = parser.parse_known_args()
+if is_testing:
+    if not args.db:
+        args.db = "test_momo.db"
+    if not args.token:
+        args.token = "test_token"
 
 app = FastAPI(title="Momo Pipeline Worker Daemon")
 security = HTTPBearer()
@@ -62,6 +70,8 @@ diarizer = Diarizer()
 transcript_master = TranscriptMaster()
 glossaries_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "glossaries"))
 glossary_processor = GlossaryProcessor(glossaries_dir)
+rag_orchestrator = RagOrchestrator()
+streaming_processor = StreamingProcessor()
 
 # Active execution states
 active_websockets: List[WebSocket] = []
@@ -322,6 +332,97 @@ def cancel_job(token: str = Depends(verify_token)):
     for job_id in list(cancel_flags.keys()):
         cancel_flags[job_id] = True
     return {"status": "CANCEL_REQUESTED"}
+
+# Pydantic models for RAG
+from pydantic import BaseModel
+class IngestSegment(BaseModel):
+    start: float
+    end: float
+    text: str
+    speaker: str = "Unknown"
+
+class IngestRequest(BaseModel):
+    project_id: str
+    media_file_id: str
+    segments: List[IngestSegment]
+
+class QueryRequest(BaseModel):
+    project_id: str
+    query: str
+    limit: int = 5
+
+@app.post("/rag/ingest")
+def rag_ingest(request: IngestRequest, token: str = Depends(verify_token)):
+    segments_dict = [seg.model_dump() if hasattr(seg, "model_dump") else seg.dict() for seg in request.segments]
+    res = rag_orchestrator.ingest_segments(request.project_id, request.media_file_id, segments_dict)
+    return res
+
+@app.post("/rag/query")
+def rag_query(request: QueryRequest, token: str = Depends(verify_token)):
+    # 1. Hybrid Search (RRF of BM25 + Qdrant vectors)
+    results = rag_orchestrator.hybrid_search(db_helper, request.project_id, request.query, limit=request.limit)
+    
+    # 2. Fetch external findings (PubMed & SEC)
+    external_findings = []
+    try:
+        pubmed_pmids = rag_orchestrator.pubmed_client.search(request.query, limit=2)
+        if pubmed_pmids:
+            external_findings.extend(rag_orchestrator.pubmed_client.fetch_summaries(pubmed_pmids))
+    except Exception:
+        pass
+        
+    try:
+        sec_filings = rag_orchestrator.sec_client.get_recent_filings(request.query, limit=2)
+        if sec_filings:
+            external_findings.extend(sec_filings)
+    except Exception:
+        pass
+        
+    # 3. Build Prompt
+    prompt = rag_orchestrator.build_prompt(results, external_findings, request.query)
+    
+    # 4. Generate Report
+    report = rag_orchestrator.generate_report(prompt)
+    
+    return {
+        "results": results,
+        "external_findings": external_findings,
+        "report": report
+    }
+
+@app.websocket("/ws/live-stream")
+async def live_stream_websocket(websocket: WebSocket, token: str):
+    if token != args.token:
+        await websocket.close(code=4001)
+        return
+        
+    await websocket.accept()
+    try:
+        audio_buffer = bytearray()
+        while True:
+            data = await websocket.receive_bytes()
+            audio_buffer.extend(data)
+            
+            # 16kHz, 16-bit mono PCM = 32000 bytes per second.
+            # Chunk transcription at 5 seconds of accumulated audio = 160,000 bytes.
+            target_bytes = 160000 
+            if len(audio_buffer) >= target_bytes:
+                chunk_bytes = bytes(audio_buffer[:target_bytes])
+                audio_buffer = audio_buffer[target_bytes:]
+                
+                text = await asyncio.to_thread(streaming_processor.transcribe_pcm, chunk_bytes)
+                await websocket.send_json({
+                    "text": text,
+                    "status": "partial"
+                })
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        sys.stderr.write(f"[WebSocket Error] Exception: {e}\n")
+        try:
+            await websocket.close()
+        except:
+            pass
 
 @app.websocket("/ws/progress")
 async def progress_websocket(websocket: WebSocket, token: str):
