@@ -4,9 +4,10 @@ import os
 import sys
 import json
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import List, Dict
+from typing import List, Dict, Optional
+from pydantic import BaseModel
 
 # Setup DLL search path for av.libs on Windows to prevent DLL load failures under dotnet host
 if sys.platform == "win32":
@@ -38,13 +39,38 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config import JobRequest
 from utils.db_helper import DbHelper
 from pipeline.ffmpeg_splitter import FfmpegSplitter
-from pipeline.whisper_worker import WhisperWorker
 from pipeline.vad_processor import VadProcessor
-from pipeline.diarizer import Diarizer
-from pipeline.transcript_master import TranscriptMaster
 from pipeline.glossary_processor import GlossaryProcessor
-from pipeline.rag_orchestrator import RagOrchestrator
-from pipeline.streaming_server import StreamingProcessor
+
+try:
+    from pipeline.whisper_worker import WhisperWorker
+except Exception as e:
+    sys.stderr.write(f"[Whisper Warning] Failed to load WhisperWorker: {e}\n")
+    WhisperWorker = None
+
+try:
+    from pipeline.diarizer import Diarizer
+except Exception as e:
+    sys.stderr.write(f"[Diarizer Warning] Failed to load Diarizer: {e}\n")
+    Diarizer = None
+
+try:
+    from pipeline.transcript_master import TranscriptMaster
+except Exception as e:
+    sys.stderr.write(f"[TranscriptMaster Warning] Failed to load TranscriptMaster: {e}\n")
+    TranscriptMaster = None
+
+try:
+    from pipeline.rag_orchestrator import RagOrchestrator
+except Exception as e:
+    sys.stderr.write(f"[RAG Warning] Failed to load RagOrchestrator: {e}\n")
+    RagOrchestrator = None
+
+try:
+    from pipeline.streaming_server import StreamingProcessor
+except Exception as e:
+    sys.stderr.write(f"[Streaming Warning] Failed to load StreamingProcessor: {e}\n")
+    StreamingProcessor = None
 
 # Argument parsing
 is_testing = "unittest" in sys.argv[0] or any("unittest" in arg for arg in sys.argv)
@@ -64,14 +90,14 @@ security = HTTPBearer()
 
 db_helper = DbHelper(args.db)
 ffmpeg_splitter = FfmpegSplitter(db_helper)
-whisper_worker = WhisperWorker(db_helper)
+whisper_worker = WhisperWorker(db_helper) if WhisperWorker else None
 vad_processor = VadProcessor()
-diarizer = Diarizer()
-transcript_master = TranscriptMaster()
+diarizer = Diarizer() if Diarizer else None
+transcript_master = TranscriptMaster() if TranscriptMaster else None
 glossaries_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "glossaries"))
 glossary_processor = GlossaryProcessor(glossaries_dir)
-rag_orchestrator = RagOrchestrator()
-streaming_processor = StreamingProcessor()
+rag_orchestrator = RagOrchestrator() if RagOrchestrator else None
+streaming_processor = StreamingProcessor() if StreamingProcessor else None
 
 # Active execution states
 active_websockets: List[WebSocket] = []
@@ -108,6 +134,11 @@ async def run_transcription_pipeline(job_id: str, request: JobRequest):
     job_settings = db_helper.get_job_settings(job_id)
     selected_glossaries = job_settings.get("selected_glossaries", [])
     
+    if whisper_worker is None:
+        db_helper.update_job_status(job_id, "FAILED", "WhisperWorker is unavailable (failed to load torch/ctranslate2).")
+        await broadcast_progress(job_id, "FAILED", 0.0, 0, 0)
+        return
+
     cancel_flags[job_id] = False
     pause_flags[job_id] = False
     
@@ -333,8 +364,152 @@ def cancel_job(token: str = Depends(verify_token)):
         cancel_flags[job_id] = True
     return {"status": "CANCEL_REQUESTED"}
 
+@app.get("/api/v1/status")
+def get_status(token: str = Depends(verify_token)):
+    return {
+        "whisper": whisper_worker is not None,
+        "diarizer": diarizer is not None,
+        "rag": rag_orchestrator is not None,
+        "streaming": streaming_processor is not None
+    }
+
+# Pydantic models for Revisions
+class RevisionCreateRequest(BaseModel):
+    transcript_id: str
+    created_by: str
+    description: Optional[str] = None
+
+# Pydantic models for Comments & Tasks
+class CommentCreateRequest(BaseModel):
+    transcript_id: str
+    paragraph_id: str
+    author: str
+    text: str
+    parent_id: Optional[str] = None
+
+class CommentUpdateRequest(BaseModel):
+    text: Optional[str] = None
+    status: Optional[str] = None
+
+class TaskCreateRequest(BaseModel):
+    transcript_id: str
+    paragraph_id: str
+    assignee: str
+    author: str
+    text: str
+
+class TaskUpdateRequest(BaseModel):
+    status: str
+
+@app.post("/api/v1/comments", status_code=201)
+def create_comment(request: CommentCreateRequest, response: Response, token: str = Depends(verify_token)):
+    import uuid
+    comment_id = str(uuid.uuid4())
+    res = db_helper.insert_comment(
+        comment_id=comment_id,
+        transcript_id=request.transcript_id,
+        paragraph_id=request.paragraph_id,
+        author=request.author,
+        text=request.text,
+        parent_id=request.parent_id
+    )
+    response.headers["Location"] = f"/api/v1/comments/{comment_id}"
+    return res
+
+@app.get("/api/v1/comments/{comment_id}")
+def get_comment(comment_id: str, token: str = Depends(verify_token)):
+    comment = db_helper.get_comment(comment_id)
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found.")
+    return comment
+
+@app.patch("/api/v1/comments/{comment_id}")
+def update_comment(comment_id: str, request: CommentUpdateRequest, token: str = Depends(verify_token)):
+    existing = db_helper.get_comment(comment_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Comment not found.")
+    res = db_helper.update_comment(
+        comment_id=comment_id,
+        text=request.text,
+        status=request.status
+    )
+    return res
+
+@app.get("/api/v1/transcripts/{transcript_id}/comments")
+def get_transcript_comments(transcript_id: str, token: str = Depends(verify_token)):
+    return db_helper.get_comments_by_transcript(transcript_id)
+
+@app.post("/api/v1/revisions", status_code=201)
+def create_revision(request: RevisionCreateRequest, response: Response, token: str = Depends(verify_token)):
+    import uuid
+    transcript = db_helper.get_transcript(request.transcript_id)
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found.")
+    
+    revision_id = str(uuid.uuid4())
+    version_number = db_helper.get_next_version_number(request.transcript_id)
+    snapshot_text = transcript.get("raw_text", "")
+    
+    res = db_helper.insert_revision(
+        revision_id=revision_id,
+        transcript_id=request.transcript_id,
+        version_number=version_number,
+        created_by=request.created_by,
+        snapshot_text=snapshot_text,
+        description=request.description
+    )
+    response.headers["Location"] = f"/api/v1/revisions/{revision_id}"
+    return res
+
+@app.get("/api/v1/transcripts/{transcript_id}/revisions")
+def get_transcript_revisions(transcript_id: str, token: str = Depends(verify_token)):
+    transcript = db_helper.get_transcript(transcript_id)
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found.")
+    return db_helper.get_revisions_by_transcript(transcript_id)
+
+@app.get("/api/v1/revisions/{revision_id}")
+def get_revision(revision_id: str, token: str = Depends(verify_token)):
+    revision = db_helper.get_revision(revision_id)
+    if not revision:
+        raise HTTPException(status_code=404, detail="Revision not found.")
+    return revision
+
+@app.post("/api/v1/tasks", status_code=201)
+def create_task(request: TaskCreateRequest, response: Response, token: str = Depends(verify_token)):
+    import uuid
+    task_id = str(uuid.uuid4())
+    res = db_helper.insert_task(
+        task_id=task_id,
+        transcript_id=request.transcript_id,
+        paragraph_id=request.paragraph_id,
+        assignee=request.assignee,
+        author=request.author,
+        text=request.text
+    )
+    response.headers["Location"] = f"/api/v1/tasks/{task_id}"
+    return res
+
+@app.get("/api/v1/tasks/{task_id}")
+def get_task(task_id: str, token: str = Depends(verify_token)):
+    task = db_helper.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    return task
+
+@app.patch("/api/v1/tasks/{task_id}")
+def update_task(task_id: str, request: TaskUpdateRequest, token: str = Depends(verify_token)):
+    existing = db_helper.get_task(task_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    res = db_helper.update_task_status(task_id, request.status)
+    return res
+
+@app.get("/api/v1/transcripts/{transcript_id}/tasks")
+def get_transcript_tasks(transcript_id: str, token: str = Depends(verify_token)):
+    return db_helper.get_tasks_by_transcript(transcript_id)
+
 # Pydantic models for RAG
-from pydantic import BaseModel
 class IngestSegment(BaseModel):
     start: float
     end: float
@@ -353,12 +528,16 @@ class QueryRequest(BaseModel):
 
 @app.post("/rag/ingest")
 def rag_ingest(request: IngestRequest, token: str = Depends(verify_token)):
+    if rag_orchestrator is None:
+        raise HTTPException(status_code=503, detail="RAG service is unavailable (failed to load torch/ctranslate2).")
     segments_dict = [seg.model_dump() if hasattr(seg, "model_dump") else seg.dict() for seg in request.segments]
     res = rag_orchestrator.ingest_segments(request.project_id, request.media_file_id, segments_dict)
     return res
 
 @app.post("/rag/query")
 def rag_query(request: QueryRequest, token: str = Depends(verify_token)):
+    if rag_orchestrator is None:
+        raise HTTPException(status_code=503, detail="RAG service is unavailable (failed to load torch/ctranslate2).")
     # 1. Hybrid Search (RRF of BM25 + Qdrant vectors)
     results = rag_orchestrator.hybrid_search(db_helper, request.project_id, request.query, limit=request.limit)
     
@@ -396,6 +575,18 @@ async def live_stream_websocket(websocket: WebSocket, token: str):
         await websocket.close(code=4001)
         return
         
+    if streaming_processor is None:
+        await websocket.accept()
+        try:
+            await websocket.send_json({
+                "text": "Streaming service is unavailable (failed to load torch/ctranslate2).",
+                "status": "error"
+            })
+            await websocket.close(code=4003)
+        except Exception:
+            pass
+        return
+
     await websocket.accept()
     try:
         audio_buffer = bytearray()

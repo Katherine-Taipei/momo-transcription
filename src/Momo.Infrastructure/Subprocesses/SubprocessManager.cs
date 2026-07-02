@@ -76,6 +76,9 @@ public class SubprocessManager : ISubprocessHost
         _activeProcess.BeginOutputReadLine();
         _activeProcess.BeginErrorReadLine();
 
+        // Wait for python uvicorn to bind to the port (up to 35 seconds)
+        IsPortOpen(_activePort, 35000);
+
         await TriggerJobStartRequestAsync(job.Id, job.MediaFile?.FilePath ?? string.Empty, tempOutputDir, job.Diarization, job.Alignment);
     }
 
@@ -142,7 +145,7 @@ public class SubprocessManager : ISubprocessHost
         """;
 
         HttpResponseMessage? response = null;
-        for (int i = 0; i < 15; i++)
+        for (int i = 0; i < 35; i++)
         {
             try
             {
@@ -158,7 +161,7 @@ public class SubprocessManager : ISubprocessHost
             }
             catch (HttpRequestException)
             {
-                if (i == 14) throw;
+                if (i == 34) throw;
             }
             await Task.Delay(1000);
         }
@@ -171,6 +174,30 @@ public class SubprocessManager : ISubprocessHost
         using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         return ((IPEndPoint)socket.LocalEndPoint!).Port;
+    }
+
+    private static bool IsPortOpen(int port, int timeoutMs)
+    {
+        var start = DateTime.UtcNow;
+        while ((DateTime.UtcNow - start).TotalMilliseconds < timeoutMs)
+        {
+            try
+            {
+                using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                var result = socket.BeginConnect(new IPEndPoint(IPAddress.Loopback, port), null, null);
+                var success = result.AsyncWaitHandle.WaitOne(200);
+                if (success && socket.Connected)
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                // Ignore and retry
+            }
+            System.Threading.Thread.Sleep(200);
+        }
+        return false;
     }
 
     private static string GenerateSecureToken()

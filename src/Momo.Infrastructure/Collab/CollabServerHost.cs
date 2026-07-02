@@ -20,7 +20,10 @@ public class CollabServerHost
         });
 
         // Add SignalR and CORS services
-        builder.Services.AddSignalR();
+        builder.Services.AddSignalR().AddJsonProtocol(options =>
+        {
+            options.PayloadSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        });
         builder.Services.AddCors(options =>
         {
             options.AddPolicy("AllowAll", policy =>

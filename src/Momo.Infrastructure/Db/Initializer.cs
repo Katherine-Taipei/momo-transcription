@@ -41,6 +41,55 @@ public static class Initializer
             command.ExecuteNonQuery();
         }
 
+        // Migrate/create comments and tasks tables if not exist
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = @"
+                CREATE TABLE IF NOT EXISTS comments (
+                    id TEXT PRIMARY KEY,
+                    transcript_id TEXT NOT NULL,
+                    paragraph_id TEXT NOT NULL,
+                    author TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    parent_id TEXT NULL,
+                    status TEXT NOT NULL DEFAULT 'open',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(transcript_id) REFERENCES transcripts(id) ON DELETE CASCADE,
+                    FOREIGN KEY(parent_id) REFERENCES comments(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_comments_paragraph_created ON comments(paragraph_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id TEXT PRIMARY KEY,
+                    transcript_id TEXT NOT NULL,
+                    paragraph_id TEXT NOT NULL,
+                    assignee TEXT NOT NULL,
+                    author TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'open',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(transcript_id) REFERENCES transcripts(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_tasks_paragraph_created ON tasks(paragraph_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS revisions (
+                    id TEXT PRIMARY KEY,
+                    transcript_id TEXT NOT NULL,
+                    version_number INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    description TEXT NULL,
+                    snapshot_text TEXT NOT NULL,
+                    FOREIGN KEY(transcript_id) REFERENCES transcripts(id) ON DELETE CASCADE,
+                    UNIQUE(transcript_id, version_number)
+                );
+                CREATE INDEX IF NOT EXISTS idx_revisions_transcript_version ON revisions(transcript_id, version_number);
+            ";
+            command.ExecuteNonQuery();
+        }
+
         // Migrate/alter job_queue to add new metadata columns if they don't exist
         using (var checkCmd = connection.CreateCommand())
         {

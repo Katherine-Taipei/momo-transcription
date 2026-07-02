@@ -13,6 +13,9 @@ public class AppDbContext : DbContext
     public DbSet<Transcript> Transcripts => Set<Transcript>();
     public DbSet<TranscriptWord> TranscriptWords => Set<TranscriptWord>();
     public DbSet<SpeakerProfile> SpeakerProfiles => Set<SpeakerProfile>();
+    public DbSet<Comment> Comments => Set<Comment>();
+    public DbSet<MomoTask> Tasks => Set<MomoTask>();
+    public DbSet<Revision> Revisions => Set<Revision>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
@@ -121,6 +124,63 @@ public class AppDbContext : DbContext
             entity.Property(e => e.OriginalId).IsRequired();
             entity.Property(e => e.DisplayName).IsRequired();
             entity.Property(e => e.VoiceprintEmbedding).IsRequired();
+        });
+
+        // Comments Table Configuration
+        modelBuilder.Entity<Comment>(entity =>
+        {
+            entity.ToTable("comments");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Author).IsRequired();
+            entity.Property(e => e.Text).IsRequired();
+            entity.Property(e => e.ParagraphId).IsRequired();
+            entity.Property(e => e.Status).IsRequired();
+            entity.HasOne(e => e.Transcript)
+                  .WithMany()
+                  .HasForeignKey(e => e.TranscriptId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Parent)
+                  .WithMany()
+                  .HasForeignKey(e => e.ParentId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.ParagraphId, e.CreatedAt })
+                  .HasDatabaseName("idx_comments_paragraph_created");
+        });
+
+        // Tasks Table Configuration
+        modelBuilder.Entity<MomoTask>(entity =>
+        {
+            entity.ToTable("tasks");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Assignee).IsRequired();
+            entity.Property(e => e.Author).IsRequired();
+            entity.Property(e => e.Text).IsRequired();
+            entity.Property(e => e.ParagraphId).IsRequired();
+            entity.Property(e => e.Status).IsRequired();
+            entity.HasOne(e => e.Transcript)
+                  .WithMany()
+                  .HasForeignKey(e => e.TranscriptId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.ParagraphId, e.CreatedAt })
+                  .HasDatabaseName("idx_tasks_paragraph_created");
+        });
+
+        // Revisions Table Configuration
+        modelBuilder.Entity<Revision>(entity =>
+        {
+            entity.ToTable("revisions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.VersionNumber).IsRequired();
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.CreatedBy).IsRequired();
+            entity.Property(e => e.SnapshotText).IsRequired();
+            entity.HasOne(e => e.Transcript)
+                  .WithMany()
+                  .HasForeignKey(e => e.TranscriptId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.TranscriptId, e.VersionNumber })
+                  .IsUnique()
+                  .HasDatabaseName("idx_revisions_transcript_version");
         });
 
         foreach (var entity in modelBuilder.Model.GetEntityTypes())

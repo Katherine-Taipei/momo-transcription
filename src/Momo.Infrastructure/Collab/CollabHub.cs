@@ -25,10 +25,10 @@ public class CollabHub : Hub
 
     public async Task JoinTranscriptGroup(string transcriptId, string userId)
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, transcriptId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"doc-{transcriptId}");
         
         // Notify others about user presence
-        await Clients.OthersInGroup(transcriptId).SendAsync("UserJoined", userId);
+        await Clients.OthersInGroup($"doc-{transcriptId}").SendAsync("UserJoined", userId);
     }
 
     public async Task SendOperation(string transcriptId, OtOperation op)
@@ -52,7 +52,7 @@ public class CollabHub : Hub
         }
 
         // Broadcast the transformed operation to others in the group
-        await Clients.OthersInGroup(transcriptId).SendAsync("ReceiveOperation", op);
+        await Clients.OthersInGroup($"doc-{transcriptId}").SendAsync("ReceiveOperation", op);
         
         // Send confirmation back to the sender with the final committed revision
         await Clients.Caller.SendAsync("ConfirmOperation", op);
@@ -60,6 +60,16 @@ public class CollabHub : Hub
 
     public async Task SendCursor(string transcriptId, string userId, int paragraphIndex, int charOffset)
     {
-        await Clients.OthersInGroup(transcriptId).SendAsync("ReceiveCursor", userId, paragraphIndex, charOffset);
+        await Clients.OthersInGroup($"doc-{transcriptId}").SendAsync("ReceiveCursor", userId, paragraphIndex, charOffset);
+    }
+
+    public async Task SendComment(string transcriptId, Momo.Core.Entities.Comment comment)
+    {
+        await Clients.OthersInGroup($"doc-{transcriptId}").SendAsync("comment_added", comment);
+    }
+
+    public async Task SendTaskUpdate(string transcriptId, Momo.Core.Entities.MomoTask task)
+    {
+        await Clients.OthersInGroup($"doc-{transcriptId}").SendAsync("task_updated", task);
     }
 }

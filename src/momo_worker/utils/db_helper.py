@@ -6,9 +6,65 @@ from datetime import datetime
 class DbHelper:
     def __init__(self, db_path: str):
         self.db_path = db_path
+        self._initialize_db()
+
+    def _initialize_db(self):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA journal_mode = WAL;")
+            cursor.execute("PRAGMA foreign_keys = ON;")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS comments (
+                    id TEXT PRIMARY KEY,
+                    transcript_id TEXT NOT NULL,
+                    paragraph_id TEXT NOT NULL,
+                    author TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    parent_id TEXT,
+                    status TEXT NOT NULL DEFAULT 'open',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(transcript_id) REFERENCES transcripts(id) ON DELETE CASCADE,
+                    FOREIGN KEY(parent_id) REFERENCES comments(id) ON DELETE CASCADE
+                );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_comments_paragraph_created ON comments(paragraph_id, created_at);")
+            
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id TEXT PRIMARY KEY,
+                    transcript_id TEXT NOT NULL,
+                    paragraph_id TEXT NOT NULL,
+                    assignee TEXT NOT NULL,
+                    author TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'open',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(transcript_id) REFERENCES transcripts(id) ON DELETE CASCADE
+                );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_paragraph_created ON tasks(paragraph_id, created_at);")
+            
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS revisions (
+                    id TEXT PRIMARY KEY,
+                    transcript_id TEXT NOT NULL,
+                    version_number INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    description TEXT,
+                    snapshot_text TEXT NOT NULL,
+                    FOREIGN KEY(transcript_id) REFERENCES transcripts(id) ON DELETE CASCADE,
+                    UNIQUE(transcript_id, version_number)
+                );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_revisions_transcript_version ON revisions(transcript_id, version_number);")
+            conn.commit()
 
     def _get_connection(self):
-        conn = sqlite3.connect(self.db_path)
+        use_uri = self.db_path.startswith("file:") or "?" in self.db_path
+        conn = sqlite3.connect(self.db_path, uri=use_uri)
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -159,3 +215,165 @@ class DbHelper:
                 (project_id,)
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def insert_comment(self, comment_id: str, transcript_id: str, paragraph_id: str, author: str, text: str, parent_id: str = None, status: str = "open", created_at: str = None, updated_at: str = None) -> dict:
+        now = datetime.utcnow().isoformat()
+        c_at = created_at or now
+        u_at = updated_at or now
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO comments (id, transcript_id, paragraph_id, author, text, parent_id, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (comment_id, transcript_id, paragraph_id, author, text, parent_id, status, c_at, u_at)
+            )
+            conn.commit()
+        return {
+            "id": comment_id,
+            "transcript_id": transcript_id,
+            "paragraph_id": paragraph_id,
+            "author": author,
+            "text": text,
+            "parent_id": parent_id,
+            "status": status,
+            "created_at": c_at,
+            "updated_at": u_at
+        }
+
+    def update_comment(self, comment_id: str, text: str = None, status: str = None) -> dict:
+        now = datetime.utcnow().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if text is not None and status is not None:
+                cursor.execute(
+                    "UPDATE comments SET text = ?, status = ?, updated_at = ? WHERE id = ?",
+                    (text, status, now, comment_id)
+                )
+            elif text is not None:
+                cursor.execute(
+                    "UPDATE comments SET text = ?, updated_at = ? WHERE id = ?",
+                    (text, now, comment_id)
+                )
+            elif status is not None:
+                cursor.execute(
+                    "UPDATE comments SET status = ?, updated_at = ? WHERE id = ?",
+                    (status, now, comment_id)
+                )
+            conn.commit()
+        return self.get_comment(comment_id)
+
+    def get_comment(self, comment_id: str) -> dict:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM comments WHERE id = ?", (comment_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def get_comments_by_transcript(self, transcript_id: str) -> list:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM comments WHERE transcript_id = ? ORDER BY created_at ASC", (transcript_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def insert_task(self, task_id: str, transcript_id: str, paragraph_id: str, assignee: str, author: str, text: str, status: str = "open", created_at: str = None, updated_at: str = None) -> dict:
+        now = datetime.utcnow().isoformat()
+        c_at = created_at or now
+        u_at = updated_at or now
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO tasks (id, transcript_id, paragraph_id, assignee, author, text, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (task_id, transcript_id, paragraph_id, assignee, author, text, status, c_at, u_at)
+            )
+            conn.commit()
+        return {
+            "id": task_id,
+            "transcript_id": transcript_id,
+            "paragraph_id": paragraph_id,
+            "assignee": assignee,
+            "author": author,
+            "text": text,
+            "status": status,
+            "created_at": c_at,
+            "updated_at": u_at
+        }
+
+    def get_task(self, task_id: str) -> dict:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def update_task_status(self, task_id: str, status: str) -> dict:
+        now = datetime.utcnow().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?",
+                (status, now, task_id)
+            )
+            conn.commit()
+        return self.get_task(task_id)
+
+    def get_tasks_by_transcript(self, transcript_id: str) -> list:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM tasks WHERE transcript_id = ? ORDER BY created_at ASC", (transcript_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_transcript(self, transcript_id: str) -> dict:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM transcripts WHERE id = ?", (transcript_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def insert_revision(self, revision_id: str, transcript_id: str, version_number: int, created_by: str, snapshot_text: str, description: str = None, created_at: str = None) -> dict:
+        now = datetime.utcnow().isoformat()
+        c_at = created_at or now
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO revisions (id, transcript_id, version_number, created_by, snapshot_text, description, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (revision_id, transcript_id, version_number, created_by, snapshot_text, description, c_at)
+            )
+            conn.commit()
+        return {
+            "id": revision_id,
+            "transcript_id": transcript_id,
+            "version_number": version_number,
+            "created_by": created_by,
+            "snapshot_text": snapshot_text,
+            "description": description,
+            "created_at": c_at
+        }
+
+    def get_revision(self, revision_id: str) -> dict:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM revisions WHERE id = ?", (revision_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def get_revisions_by_transcript(self, transcript_id: str) -> list:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM revisions WHERE transcript_id = ? ORDER BY version_number DESC", (transcript_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_next_version_number(self, transcript_id: str) -> int:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT MAX(version_number) as max_v FROM revisions WHERE transcript_id = ?", (transcript_id,))
+            row = cursor.fetchone()
+            max_v = row["max_v"]
+            return (max_v + 1) if max_v is not None else 1

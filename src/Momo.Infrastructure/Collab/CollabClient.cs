@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR.Client;
+using Momo.Core.Entities;
 
 namespace Momo.Infrastructure.Collab;
 
@@ -14,6 +15,8 @@ public class CollabClient
     public event Action<OtOperation>? OnOperationConfirmed;
     public event Action<string, int, int>? OnCursorReceived;
     public event Action<string>? OnUserJoined;
+    public event Action<Comment>? OnCommentReceived;
+    public event Action<MomoTask>? OnTaskUpdateReceived;
 
     public CollabClient(string serverUrl)
     {
@@ -28,6 +31,8 @@ public class CollabClient
         _connection.On<string, int, int>("ReceiveCursor", (userId, paragraphIndex, charOffset) => 
             OnCursorReceived?.Invoke(userId, paragraphIndex, charOffset));
         _connection.On<string>("UserJoined", userId => OnUserJoined?.Invoke(userId));
+        _connection.On<Comment>("comment_added", comment => OnCommentReceived?.Invoke(comment));
+        _connection.On<MomoTask>("task_updated", task => OnTaskUpdateReceived?.Invoke(task));
     }
 
     public async Task StartAsync()
@@ -48,6 +53,16 @@ public class CollabClient
     public async Task SubmitCursorAsync(string transcriptId, string userId, int paragraphIndex, int charOffset)
     {
         await _connection.SendAsync("SendCursor", transcriptId, userId, paragraphIndex, charOffset);
+    }
+
+    public async Task SubmitCommentAsync(string transcriptId, Comment comment)
+    {
+        await _connection.SendAsync("SendComment", transcriptId, comment);
+    }
+
+    public async Task SubmitTaskUpdateAsync(string transcriptId, MomoTask task)
+    {
+        await _connection.SendAsync("SendTaskUpdate", transcriptId, task);
     }
 
     public async Task StopAsync()
