@@ -379,6 +379,9 @@ class RevisionCreateRequest(BaseModel):
     created_by: str
     description: Optional[str] = None
 
+class RollbackRequest(BaseModel):
+    operator: Optional[str] = "System"
+
 # Pydantic models for Comments & Tasks
 class CommentCreateRequest(BaseModel):
     transcript_id: str
@@ -474,6 +477,41 @@ def get_revision(revision_id: str, token: str = Depends(verify_token)):
     if not revision:
         raise HTTPException(status_code=404, detail="Revision not found.")
     return revision
+
+@app.post("/api/v1/revisions/{revision_id}/rollback")
+def rollback_revision(revision_id: str, request: RollbackRequest, response: Response, token: str = Depends(verify_token)):
+    import uuid
+    revision = db_helper.get_revision(revision_id)
+    if not revision:
+        raise HTTPException(status_code=404, detail="Revision not found.")
+    
+    transcript_id = revision["transcript_id"]
+    transcript = db_helper.get_transcript(transcript_id)
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found.")
+    
+    # 1. Create AUTO_ROLLBACK revision containing CURRENT state before overwrite
+    auto_id = str(uuid.uuid4())
+    next_version = db_helper.get_next_version_number(transcript_id)
+    current_text = transcript.get("raw_text", "")
+    
+    db_helper.insert_revision(
+        revision_id=auto_id,
+        transcript_id=transcript_id,
+        version_number=next_version,
+        created_by=request.operator,
+        snapshot_text=current_text,
+        description=f"AUTO_ROLLBACK to version {revision['version_number']}"
+    )
+    
+    # 2. Overwrite transcript with the target revision snapshot
+    db_helper.rollback_transcript(transcript_id, revision["snapshot_text"])
+    
+    return {
+        "success": True,
+        "rolled_back_to": revision["version_number"],
+        "auto_rollback_version": next_version
+    }
 
 @app.post("/api/v1/tasks", status_code=201)
 def create_task(request: TaskCreateRequest, response: Response, token: str = Depends(verify_token)):

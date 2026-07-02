@@ -39,6 +39,18 @@ class TestPhase4P4_3(unittest.TestCase):
                     FOREIGN KEY(project_id) REFERENCES projects(id)
                 );
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS transcript_words (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    transcript_id TEXT NOT NULL,
+                    word TEXT NOT NULL,
+                    start_time REAL NOT NULL,
+                    end_time REAL NOT NULL,
+                    speaker_id TEXT NOT NULL,
+                    confidence REAL NOT NULL,
+                    FOREIGN KEY(transcript_id) REFERENCES transcripts(id) ON DELETE CASCADE
+                );
+            """)
             conn.commit()
             
         db_helper._initialize_db()
@@ -148,6 +160,55 @@ class TestPhase4P4_3(unittest.TestCase):
     def test_get_transcript_revisions_not_found(self):
         response = self.client.get("/api/v1/transcripts/trans_999/revisions", headers=self.headers)
         self.assertEqual(response.status_code, 404)
+
+    def test_rollback_revision_success(self):
+        # Seed an initial revision (version 1)
+        db_helper.insert_revision("r_1", "trans_1", 1, "UserA", "Version 1 raw text", "V1 backup")
+        
+        # Modify active transcript text
+        with db_helper._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE transcripts SET raw_text = 'Modified active text' WHERE id = 'trans_1'")
+            conn.commit()
+            
+        payload = {"operator": "UserB"}
+        response = self.client.post("/api/v1/revisions/r_1/rollback", json=payload, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["rolled_back_to"], 1)
+        self.assertEqual(data["auto_rollback_version"], 2)
+        
+        # Verify active transcript is rolled back to Version 1 text
+        transcript = db_helper.get_transcript("trans_1")
+        self.assertEqual(transcript["raw_text"], "Version 1 raw text")
+        
+        # Verify AUTO_ROLLBACK revision (version 2) is created with the Modified active text
+        revisions = db_helper.get_revisions_by_transcript("trans_1")
+        auto_rev = revisions[0] # returns sorted desc, so version 2 is index 0
+        self.assertEqual(auto_rev["version_number"], 2)
+        self.assertEqual(auto_rev["created_by"], "UserB")
+        self.assertEqual(auto_rev["snapshot_text"], "Modified active text")
+        self.assertIn("AUTO_ROLLBACK to version 1", auto_rev["description"])
+
+    def test_rollback_revision_not_found(self):
+        payload = {"operator": "UserB"}
+        response = self.client.post("/api/v1/revisions/r_999/rollback", json=payload, headers=self.headers)
+        self.assertEqual(response.status_code, 404)
+
+    def test_rollback_continuous_increments(self):
+        db_helper.insert_revision("r_1", "trans_1", 1, "UserA", "Version 1 text", "V1")
+        
+        # First rollback (v1 -> v2 auto rollback)
+        res1 = self.client.post("/api/v1/revisions/r_1/rollback", json={"operator": "UserB"}, headers=self.headers)
+        self.assertEqual(res1.status_code, 200)
+        self.assertEqual(res1.json()["auto_rollback_version"], 2)
+        
+        # Second rollback (v1 -> v3 auto rollback)
+        res2 = self.client.post("/api/v1/revisions/r_1/rollback", json={"operator": "UserC"}, headers=self.headers)
+        self.assertEqual(res2.status_code, 200)
+        self.assertEqual(res2.json()["auto_rollback_version"], 3)
 
 if __name__ == "__main__":
     unittest.main()

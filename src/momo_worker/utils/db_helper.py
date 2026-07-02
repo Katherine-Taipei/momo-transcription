@@ -377,3 +377,13 @@ class DbHelper:
             row = cursor.fetchone()
             max_v = row["max_v"]
             return (max_v + 1) if max_v is not None else 1
+
+    def rollback_transcript(self, transcript_id: str, snapshot_text: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE transcripts SET raw_text = ?, updated_at = ? WHERE id = ?",
+                (snapshot_text, datetime.utcnow().isoformat(), transcript_id)
+            )
+            cursor.execute("DELETE FROM transcript_words WHERE transcript_id = ?", (transcript_id,))
+            conn.commit()

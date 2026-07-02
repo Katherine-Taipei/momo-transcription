@@ -84,7 +84,7 @@ public class CollabCommentTests : IDisposable
         _pythonProcess = Process.Start(startInfo);
         if (_pythonProcess != null)
         {
-            var logPath = Path.Combine("d:\\Antigravity\\Project 3_Enterprise Momo", "python_test_run.log");
+            var logPath = Path.Combine("d:\\Antigravity\\Project 3_Enterprise Momo", "collab_comment_python_test_run.log");
             File.WriteAllText(logPath, $"Starting python worker with args: {arguments}\n");
             _pythonProcess.OutputDataReceived += (s, e) => {
                 if (e.Data != null) File.AppendAllText(logPath, "[STDOUT] " + e.Data + "\n");
