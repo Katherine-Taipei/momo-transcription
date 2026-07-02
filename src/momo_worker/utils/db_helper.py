@@ -55,11 +55,18 @@ class DbHelper:
                     created_by TEXT NOT NULL,
                     description TEXT,
                     snapshot_text TEXT NOT NULL,
+                    status TEXT CHECK(status IN ('pending','accepted','rejected')) DEFAULT 'pending',
                     FOREIGN KEY(transcript_id) REFERENCES transcripts(id) ON DELETE CASCADE,
                     UNIQUE(transcript_id, version_number)
                 );
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_revisions_transcript_version ON revisions(transcript_id, version_number);")
+            
+            cursor.execute("PRAGMA table_info(revisions);")
+            columns = [row[1] for row in cursor.fetchall()]
+            if columns and "status" not in columns:
+                cursor.execute("ALTER TABLE revisions ADD COLUMN status TEXT CHECK(status IN ('pending','accepted','rejected')) DEFAULT 'pending';")
+            
             conn.commit()
 
     def _get_connection(self):
@@ -334,17 +341,17 @@ class DbHelper:
             row = cursor.fetchone()
             return dict(row) if row else None
 
-    def insert_revision(self, revision_id: str, transcript_id: str, version_number: int, created_by: str, snapshot_text: str, description: str = None, created_at: str = None) -> dict:
+    def insert_revision(self, revision_id: str, transcript_id: str, version_number: int, created_by: str, snapshot_text: str, description: str = None, created_at: str = None, status: str = "pending") -> dict:
         now = datetime.utcnow().isoformat()
         c_at = created_at or now
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO revisions (id, transcript_id, version_number, created_by, snapshot_text, description, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO revisions (id, transcript_id, version_number, created_by, snapshot_text, description, created_at, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (revision_id, transcript_id, version_number, created_by, snapshot_text, description, c_at)
+                (revision_id, transcript_id, version_number, created_by, snapshot_text, description, c_at, status)
             )
             conn.commit()
         return {
@@ -354,7 +361,8 @@ class DbHelper:
             "created_by": created_by,
             "snapshot_text": snapshot_text,
             "description": description,
-            "created_at": c_at
+            "created_at": c_at,
+            "status": status
         }
 
     def get_revision(self, revision_id: str) -> dict:
@@ -387,3 +395,36 @@ class DbHelper:
             )
             cursor.execute("DELETE FROM transcript_words WHERE transcript_id = ?", (transcript_id,))
             conn.commit()
+
+    def update_revision_status(self, revision_id: str, status: str) -> dict:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE revisions SET status = ? WHERE id = ?",
+                (status, revision_id)
+            )
+            conn.commit()
+        return self.get_revision(revision_id)
+
+    def get_previous_revision_snapshot(self, transcript_id: str, version_number: int) -> str:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            # 1. Try to find the closest preceding accepted version
+            cursor.execute(
+                "SELECT snapshot_text FROM revisions WHERE transcript_id = ? AND version_number < ? AND (status = 'accepted' OR status IS NULL) ORDER BY version_number DESC LIMIT 1",
+                (transcript_id, version_number)
+            )
+            row = cursor.fetchone()
+            if row:
+                return row["snapshot_text"]
+            
+            # 2. Fallback to any preceding version if no accepted one is found
+            cursor.execute(
+                "SELECT snapshot_text FROM revisions WHERE transcript_id = ? AND version_number < ? ORDER BY version_number DESC LIMIT 1",
+                (transcript_id, version_number)
+            )
+            row = cursor.fetchone()
+            if row:
+                return row["snapshot_text"]
+                
+            return None

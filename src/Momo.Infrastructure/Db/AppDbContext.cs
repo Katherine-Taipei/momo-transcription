@@ -174,6 +174,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.Property(e => e.CreatedBy).IsRequired();
             entity.Property(e => e.SnapshotText).IsRequired();
+            entity.Property(e => e.Status).HasDefaultValue("pending").IsRequired();
             entity.HasOne(e => e.Transcript)
                   .WithMany()
                   .HasForeignKey(e => e.TranscriptId)

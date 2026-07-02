@@ -210,5 +210,84 @@ class TestPhase4P4_3(unittest.TestCase):
         self.assertEqual(res2.status_code, 200)
         self.assertEqual(res2.json()["auto_rollback_version"], 3)
 
+    def test_update_revision_status_accept(self):
+        db_helper.insert_revision("r_pending", "trans_1", 1, "UserA", "Version 1 text", "V1", status="pending")
+        response = self.client.patch("/api/v1/revisions/r_pending", json={"status": "accepted"}, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "accepted")
+
+        db_rev = db_helper.get_revision("r_pending")
+        self.assertEqual(db_rev["status"], "accepted")
+
+    def test_update_revision_status_reject_rollback(self):
+        # We need an accepted version (version 1) and a pending version (version 2)
+        db_helper.insert_revision("r_acc", "trans_1", 1, "UserA", "Accepted base text", "V1", status="accepted")
+        db_helper.insert_revision("r_pend", "trans_1", 2, "UserB", "Pending edited text", "V2", status="pending")
+
+        # Set active transcript text to the pending text
+        with db_helper._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE transcripts SET raw_text = 'Pending edited text' WHERE id = 'trans_1'")
+            conn.commit()
+
+        # Reject version 2: it should rollback transcripts.raw_text to version 1 snapshot text ("Accepted base text")
+        response = self.client.patch("/api/v1/revisions/r_pend", json={"status": "rejected"}, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "rejected")
+
+        # Verify active transcript reverted
+        trans = db_helper.get_transcript("trans_1")
+        self.assertEqual(trans["raw_text"], "Accepted base text")
+
+        db_rev = db_helper.get_revision("r_pend")
+        self.assertEqual(db_rev["status"], "rejected")
+
+    def test_update_revision_status_reject_no_preceding_accepted(self):
+        db_helper.insert_revision("r_pend_no_prev", "trans_1", 1, "UserA", "Pending text", "V1", status="pending")
+        response = self.client.patch("/api/v1/revisions/r_pend_no_prev", json={"status": "rejected"}, headers=self.headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("No preceding revision found", response.json()["detail"])
+
+    def test_update_revision_status_not_found(self):
+        response = self.client.patch("/api/v1/revisions/r_not_exist", json={"status": "accepted"}, headers=self.headers)
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_revision_status_invalid_value(self):
+        db_helper.insert_revision("r_pend_inv", "trans_1", 1, "UserA", "V1 text", "V1", status="pending")
+        response = self.client.patch("/api/v1/revisions/r_pend_inv", json={"status": "invalid_status"}, headers=self.headers)
+        self.assertEqual(response.status_code, 400)
+
+    def test_batch_accept_revisions(self):
+        db_helper.insert_revision("r1", "trans_1", 1, "UserA", "T1", "V1", status="pending")
+        db_helper.insert_revision("r2", "trans_1", 2, "UserB", "T2", "V2", status="pending")
+        
+        response = self.client.post("/api/v1/transcripts/trans_1/revisions/batch", json={"status": "accepted"}, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["updated_count"], 2)
+        self.assertEqual(response.json()["status"], "accepted")
+
+        self.assertEqual(db_helper.get_revision("r1")["status"], "accepted")
+        self.assertEqual(db_helper.get_revision("r2")["status"], "accepted")
+
+    def test_batch_reject_revisions(self):
+        db_helper.insert_revision("r_base", "trans_1", 1, "UserA", "Base text", "V0", status="accepted")
+        db_helper.insert_revision("r1", "trans_1", 2, "UserB", "T1", "V1", status="pending")
+        db_helper.insert_revision("r2", "trans_1", 3, "UserC", "T2", "V2", status="pending")
+
+        with db_helper._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE transcripts SET raw_text = 'T2' WHERE id = 'trans_1'")
+            conn.commit()
+
+        response = self.client.post("/api/v1/transcripts/trans_1/revisions/batch", json={"status": "rejected"}, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["updated_count"], 2)
+        self.assertEqual(response.json()["status"], "rejected")
+
+        # Reverted to base
+        self.assertEqual(db_helper.get_transcript("trans_1")["raw_text"], "Base text")
+        self.assertEqual(db_helper.get_revision("r1")["status"], "rejected")
+        self.assertEqual(db_helper.get_revision("r2")["status"], "rejected")
+
 if __name__ == "__main__":
     unittest.main()

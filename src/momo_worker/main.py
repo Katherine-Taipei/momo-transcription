@@ -382,6 +382,14 @@ class RevisionCreateRequest(BaseModel):
 class RollbackRequest(BaseModel):
     operator: Optional[str] = "System"
 
+class RevisionStatusUpdateRequest(BaseModel):
+    status: str
+    operator: Optional[str] = "System"
+
+class RevisionBatchStatusRequest(BaseModel):
+    status: str
+    operator: Optional[str] = "System"
+
 # Pydantic models for Comments & Tasks
 class CommentCreateRequest(BaseModel):
     transcript_id: str
@@ -501,7 +509,8 @@ def rollback_revision(revision_id: str, request: RollbackRequest, response: Resp
         version_number=next_version,
         created_by=request.operator,
         snapshot_text=current_text,
-        description=f"AUTO_ROLLBACK to version {revision['version_number']}"
+        description=f"AUTO_ROLLBACK to version {revision['version_number']}",
+        status="accepted"
     )
     
     # 2. Overwrite transcript with the target revision snapshot
@@ -512,6 +521,75 @@ def rollback_revision(revision_id: str, request: RollbackRequest, response: Resp
         "rolled_back_to": revision["version_number"],
         "auto_rollback_version": next_version
     }
+
+@app.patch("/api/v1/revisions/{revision_id}")
+def update_revision_status(revision_id: str, request: RevisionStatusUpdateRequest, token: str = Depends(verify_token)):
+    """
+    Accept or reject a pending revision.
+    - accepted: Updates the revision status to 'accepted'.
+    - rejected: Updates the revision status to 'rejected' and rolls back the active transcript text to the previous accepted revision.
+    """
+    revision = db_helper.get_revision(revision_id)
+    if not revision:
+        raise HTTPException(status_code=404, detail="Revision not found.")
+        
+    status = request.status.lower()
+    if status not in ("accepted", "rejected"):
+        raise HTTPException(status_code=400, detail="Invalid status. Must be 'accepted' or 'rejected'.")
+        
+    if status == "accepted":
+        res = db_helper.update_revision_status(revision_id, "accepted")
+        return res
+    else: # status == "rejected"
+        transcript_id = revision["transcript_id"]
+        version_number = revision["version_number"]
+        
+        prev_snapshot = db_helper.get_previous_revision_snapshot(transcript_id, version_number)
+        if prev_snapshot is None:
+            raise HTTPException(status_code=400, detail="No preceding revision found to rollback to.")
+            
+        db_helper.rollback_transcript(transcript_id, prev_snapshot)
+        res = db_helper.update_revision_status(revision_id, "rejected")
+        return res
+
+@app.post("/api/v1/transcripts/{transcript_id}/revisions/batch")
+def batch_update_revisions_status(transcript_id: str, request: RevisionBatchStatusRequest, token: str = Depends(verify_token)):
+    """
+    Batch accept or reject all pending revisions for a transcript.
+    - accepted: Marks all pending revisions as 'accepted'.
+    - rejected: Marks all pending revisions as 'rejected' and rolls back the active transcript text to the closest accepted revision prior to the earliest pending change.
+    """
+    transcript = db_helper.get_transcript(transcript_id)
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found.")
+        
+    status = request.status.lower()
+    if status not in ("accepted", "rejected"):
+        raise HTTPException(status_code=400, detail="Invalid status. Must be 'accepted' or 'rejected'.")
+        
+    revisions = db_helper.get_revisions_by_transcript(transcript_id)
+    pending_revisions = [r for r in revisions if r["status"] == "pending"]
+    
+    if not pending_revisions:
+        return {"updated_count": 0, "status": status}
+        
+    if status == "accepted":
+        for r in pending_revisions:
+            db_helper.update_revision_status(r["id"], "accepted")
+        return {"updated_count": len(pending_revisions), "status": "accepted"}
+    else: # status == "rejected"
+        min_v = min(r["version_number"] for r in pending_revisions)
+        
+        prev_snapshot = db_helper.get_previous_revision_snapshot(transcript_id, min_v)
+        if prev_snapshot is None:
+            raise HTTPException(status_code=400, detail="No preceding revision found to rollback to.")
+            
+        db_helper.rollback_transcript(transcript_id, prev_snapshot)
+        
+        for r in pending_revisions:
+            db_helper.update_revision_status(r["id"], "rejected")
+            
+        return {"updated_count": len(pending_revisions), "status": "rejected"}
 
 @app.post("/api/v1/tasks", status_code=201)
 def create_task(request: TaskCreateRequest, response: Response, token: str = Depends(verify_token)):

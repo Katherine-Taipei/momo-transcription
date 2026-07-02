@@ -2,6 +2,31 @@
 
 All notable changes to the Momo Transcription Platform will be documented in this file.
 
+## [4.4.0-alpha1] - 2026-07-02
+
+### Phase 4-4: DOCX Track Changes (Milestone P4-4-1)
+
+This release implements revisions status schemas, status management REST APIs, and automated test cases.
+
+### Added
+- **Revisions Status Schema**: Added `status` column to the `revisions` table (`pending`, `accepted`, `rejected`, defaulting to `pending`) with dynamic check constraint and SQLite migrations in C# and Python.
+- **Accept/Reject API Endpoints**: Created `PATCH /api/v1/revisions/{id}` to accept/reject revisions (rejecting triggers rollback to the closest preceding accepted version).
+- **Batch Revisions Endpoint**: Created `POST /api/v1/transcripts/{id}/revisions/batch` supporting batch accept/reject updates.
+- **Status & Reversion Tests**: Added python unit tests verifying the status update transitions, batch actions, and reject rollback chains.
+
+## [4.3.0] - 2026-07-02
+
+### Phase 4-3: Version Tree & Diff UI
+
+This release introduces the Version History timeline tree panel, dynamic multi-granularity diff comparisons, and real-time collaboration rollback sync.
+
+### Added
+- **Version History UI Tab**: Implemented timeline version list search panel, search filters, and show/hide Autosaves checkbox to filter timeline noise.
+- **Side-by-Side Diff Panel**: Connected dual-column comparative viewport displaying deleted (red), inserted (green), and modified (high contrast blue `#364F6B`) line segments with Line, Word, and Character granularity controls.
+- **Rollback Sync**: Hooked up uvicorn rollback trigger and SignalR broadcast events to clear local OT queue and reload editor contents dynamically.
+- **xUnit Concurrency Isolation**: Configured isolated database naming using GUIDs (`momo_ui_version_test_{Guid}.db`) to support clean concurrent parallel test runs in xUnit.
+- **Collaboration Fix**: Fixed a critical race condition in `StartCollabConnectionAsync` where `_activeTranscriptId` was cleared due to asynchronous disconnect call.
+
 ## [4.0.0-alpha1] - 2026-06-26
 
 ### Phase 4: Collaboration & Versioning (Milestone P4-1)

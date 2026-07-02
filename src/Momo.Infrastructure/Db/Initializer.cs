@@ -82,6 +82,7 @@ public static class Initializer
                     created_by TEXT NOT NULL,
                     description TEXT NULL,
                     snapshot_text TEXT NOT NULL,
+                    status TEXT CHECK(status IN ('pending','accepted','rejected')) DEFAULT 'pending',
                     FOREIGN KEY(transcript_id) REFERENCES transcripts(id) ON DELETE CASCADE,
                     UNIQUE(transcript_id, version_number)
                 );
@@ -118,6 +119,25 @@ public static class Initializer
             {
                 using var alterCmd = connection.CreateCommand();
                 alterCmd.CommandText = "ALTER TABLE job_queue ADD COLUMN selected_template TEXT NULL;";
+                alterCmd.ExecuteNonQuery();
+            }
+        }
+
+        using (var checkCmd = connection.CreateCommand())
+        {
+            checkCmd.CommandText = "PRAGMA table_info(revisions);";
+            using var reader = checkCmd.ExecuteReader();
+            var columns = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            while (reader.Read())
+            {
+                columns.Add(reader.GetString(1));
+            }
+            reader.Close();
+
+            if (!columns.Contains("status"))
+            {
+                using var alterCmd = connection.CreateCommand();
+                alterCmd.CommandText = "ALTER TABLE revisions ADD COLUMN status TEXT CHECK(status IN ('pending','accepted','rejected')) DEFAULT 'pending';";
                 alterCmd.ExecuteNonQuery();
             }
         }

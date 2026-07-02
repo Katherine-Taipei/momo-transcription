@@ -11,6 +11,7 @@ public class Revision
     public string CreatedBy { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string SnapshotText { get; set; } = string.Empty;
+    public string Status { get; set; } = "pending";
 
     public Transcript? Transcript { get; set; }
 }
