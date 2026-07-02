@@ -18,6 +18,7 @@ public class CollabClient
     public event Action<Comment>? OnCommentReceived;
     public event Action<MomoTask>? OnTaskUpdateReceived;
     public event Action<string>? OnRollbackApplied;
+    public event Action<string, string>? OnRevisionStatusChanged;
 
     public CollabClient(string serverUrl)
     {
@@ -35,6 +36,8 @@ public class CollabClient
         _connection.On<Comment>("comment_added", comment => OnCommentReceived?.Invoke(comment));
         _connection.On<MomoTask>("task_updated", task => OnTaskUpdateReceived?.Invoke(task));
         _connection.On<string>("rollback_applied", revisionId => OnRollbackApplied?.Invoke(revisionId));
+        _connection.On<string, string>("revision_status_changed", (revisionId, status) => 
+            OnRevisionStatusChanged?.Invoke(revisionId, status));
     }
 
     public async Task StartAsync()
@@ -70,6 +73,11 @@ public class CollabClient
     public async Task SubmitRollbackAsync(string transcriptId, string revisionId)
     {
         await _connection.SendAsync("ApplyRollback", transcriptId, revisionId);
+    }
+
+    public async Task SubmitRevisionStatusAsync(string transcriptId, string revisionId, string status)
+    {
+        await _connection.SendAsync("UpdateRevisionStatus", transcriptId, revisionId, status);
     }
 
     public async Task StopAsync()

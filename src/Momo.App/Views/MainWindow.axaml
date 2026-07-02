@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Momo.App.ViewModels"
         xmlns:controls="using:Momo.App.Controls"
+        xmlns:converters="using:Momo.App.Converters"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="850" d:DesignHeight="600"
@@ -11,6 +12,10 @@
         Width="1050" Height="650"
         WindowStartupLocation="CenterScreen"
         Background="#12131C">
+
+    <Window.Resources>
+        <converters:StatusToBrushConverter x:Key="StatusToBrushConverter"/>
+    </Window.Resources>
 
     <Grid ColumnDefinitions="240, *, Auto">
         <!-- Sidebar Navigation -->
@@ -209,7 +214,7 @@
                 <Grid ColumnDefinitions="300, 15, *" Margin="10,20,10,10">
                     <!-- Left Panel: Version Tree Timeline -->
                     <Border Grid.Column="0" Background="#1A1C29" CornerRadius="12" BorderBrush="#25273C" BorderThickness="1" Padding="15">
-                        <Grid RowDefinitions="Auto, Auto, Auto, *">
+                        <Grid RowDefinitions="Auto, Auto, Auto, *, Auto">
                             <TextBlock Grid.Row="0" Text="Version History Tree" FontSize="14" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,10"/>
                             
                             <!-- Search filter -->
@@ -220,16 +225,20 @@
 
                             <!-- Versions List -->
                             <ScrollViewer Grid.Row="3">
-                                <ListBox ItemsSource="{Binding FilteredRevisions}" SelectedItem="{Binding SelectedRevision}" Background="Transparent" BorderThickness="0">
+                                <ListBox x:Name="RevisionListBox" ItemsSource="{Binding FilteredRevisions}" SelectedItem="{Binding SelectedRevision}" Background="Transparent" BorderThickness="0">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <Border CornerRadius="8" Padding="10" Margin="0,0,0,8" Background="#151722" BorderBrush="#25273C" BorderThickness="1">
                                                 <StackPanel Spacing="5">
-                                                    <Grid ColumnDefinitions="*, Auto">
+                                                    <Grid ColumnDefinitions="*, Auto, Auto">
                                                         <TextBlock Grid.Column="0" Text="{Binding VersionNumber, StringFormat='Version {0}'}" FontWeight="Bold" Foreground="#8B5CF6" FontSize="12"/>
-                                                        <TextBlock Grid.Column="1" Text="{Binding CreatedBy}" Foreground="#34D399" FontSize="10" FontWeight="SemiBold"/>
+                                                        <!-- Status Badge -->
+                                                        <Border Grid.Column="1" CornerRadius="4" Padding="5,2" Margin="4,0" Background="{Binding Status, Converter={StaticResource StatusToBrushConverter}}">
+                                                            <TextBlock Text="{Binding Status}" Foreground="White" FontSize="9" FontWeight="Bold"/>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="2" Text="{Binding CreatedBy}" Foreground="#34D399" FontSize="10" FontWeight="SemiBold"/>
                                                     </Grid>
-                                                    <TextBlock Text="{Binding CreatedAt, StringFormat='\{0:yyyy-MM-dd HH:mm:ss\}'}" Foreground="#6D7090" FontSize="10"/>
+                                                    <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" Foreground="#6D7090" FontSize="10"/>
                                                     <TextBlock Text="{Binding Description}" Foreground="White" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"/>
                                                 </StackPanel>
                                             </Border>
@@ -237,6 +246,25 @@
                                     </ListBox.ItemTemplate>
                                 </ListBox>
                             </ScrollViewer>
+
+                            <!-- Batch Actions Footer -->
+                            <StackPanel Grid.Row="4" Orientation="Vertical" Spacing="6" Margin="0,12,0,0">
+                                <TextBlock Text="Batch Actions (All Pending)" Foreground="#6D7090" FontSize="10" FontWeight="SemiBold"/>
+                                <Grid ColumnDefinitions="*, 8, *">
+                                    <Button x:Name="BatchAcceptButton" Grid.Column="0"
+                                            Content="✓ Accept All"
+                                            Command="{Binding BatchAcceptCommand}"
+                                            Background="#065F46" Foreground="#34D399"
+                                            Padding="8,6" CornerRadius="6" FontSize="11" FontWeight="SemiBold"
+                                            ToolTip.Tip="Accept all pending revisions. This action cannot be undone."/>
+                                    <Button x:Name="BatchRejectButton" Grid.Column="2"
+                                            Content="✗ Reject All"
+                                            Command="{Binding BatchRejectCommand}"
+                                            Background="#7F1D1D" Foreground="#F87171"
+                                            Padding="8,6" CornerRadius="6" FontSize="11" FontWeight="SemiBold"
+                                            ToolTip.Tip="Reject all pending revisions and roll back. This action cannot be undone."/>
+                                </Grid>
+                            </StackPanel>
                         </Grid>
                     </Border>
 
@@ -244,17 +272,41 @@
                     <Border Grid.Column="2" Background="#1A1C29" CornerRadius="12" BorderBrush="#25273C" BorderThickness="1" Padding="15">
                         <Grid RowDefinitions="Auto, *">
                             <!-- Diff Header Actions -->
-                            <Grid Grid.Row="0" ColumnDefinitions="*, Auto, Auto" Margin="0,0,0,15">
+                            <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,15">
                                 <TextBlock Grid.Column="0" Text="Side-by-Side Version Diff" FontSize="14" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
                                 
-                                <!-- Granularity Selector Toggle -->
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="0,0,15,0">
-                                    <TextBlock Text="Granularity:" Foreground="#6D7090" FontSize="12" VerticalAlignment="Center"/>
-                                    <ComboBox ItemsSource="{Binding DiffGranularityOptions}" SelectedItem="{Binding DiffGranularity}" Width="90" Height="32" Background="#12131C" BorderBrush="#25273C" Foreground="White"/>
+                                <!-- Action Buttons row -->
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                    <!-- Granularity -->
+                                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                        <TextBlock Text="Granularity:" Foreground="#6D7090" FontSize="12" VerticalAlignment="Center"/>
+                                        <ComboBox ItemsSource="{Binding DiffGranularityOptions}" SelectedItem="{Binding DiffGranularity}" Width="90" Height="32" Background="#12131C" BorderBrush="#25273C" Foreground="White"/>
+                                    </StackPanel>
+                                    <!-- Accept Revision -->
+                                    <Button x:Name="AcceptRevisionButton"
+                                            Content="✓ Accept"
+                                            Command="{Binding AcceptRevisionCommand}"
+                                            IsEnabled="{Binding !!SelectedRevision}"
+                                            Background="#065F46" Foreground="#34D399"
+                                            Padding="12,6" CornerRadius="8" FontWeight="SemiBold" FontSize="12"
+                                            ToolTip.Tip="Accept the selected revision"/>
+                                    <!-- Reject Revision -->
+                                    <Button x:Name="RejectRevisionButton"
+                                            Content="✗ Reject"
+                                            Command="{Binding RejectRevisionCommand}"
+                                            IsEnabled="{Binding !!SelectedRevision}"
+                                            Background="#7F1D1D" Foreground="#F87171"
+                                            Padding="12,6" CornerRadius="8" FontWeight="SemiBold" FontSize="12"
+                                            ToolTip.Tip="Reject the selected revision (rolls back transcript)"/>
+                                    <!-- Rollback Button -->
+                                    <Button x:Name="RollbackButton"
+                                            Content="↩ Rollback"
+                                            Command="{Binding RollbackCommand}"
+                                            IsEnabled="{Binding !!SelectedRevision}"
+                                            Background="#EF4444" Foreground="White"
+                                            Padding="12,6" CornerRadius="8" FontWeight="SemiBold" FontSize="12"
+                                            ToolTip.Tip="Roll back to this selected version"/>
                                 </StackPanel>
-
-                                <!-- Rollback Button -->
-                                <Button Grid.Column="2" Content="Rollback to Selected" Command="{Binding RollbackCommand}" IsEnabled="{Binding !!SelectedRevision}" Background="#EF4444" Foreground="White" Padding="15,6" CornerRadius="8" FontWeight="SemiBold"/>
                             </Grid>
 
                             <!-- Dual Pane Diff Viewer -->

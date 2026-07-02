@@ -2,6 +2,22 @@
 
 All notable changes to the Momo Transcription Platform will be documented in this file.
 
+## [4.4.0] - 2026-07-02
+
+### Phase 4-4: DOCX Track Changes – Full Release
+
+Complete implementation of Word-compatible Track Changes export, revision status management, real-time SignalR sync, and Accept/Reject UI.
+
+### Added
+- **Revisions Status Schema** (`P4-4-1`): `status` column (`pending / accepted / rejected`) with SQLite migrations in C# and Python.
+- **Accept / Reject API** (`P4-4-1`): `PATCH /api/v1/revisions/{id}` and `POST /api/v1/transcripts/{id}/revisions/batch`; reject triggers auto-rollback to the last accepted version.
+- **OpenXML Track Changes Exporter** (`P4-4-2`): Stream-based `<w:ins>` / `<w:del>` output with author & date metadata; dual-script fonts (DFKai-SB 12 pt / Times New Roman 11 pt), 6-level Chinese outline numbering, A4 page layout (2 cm margins).
+- **SignalR Revision-Status Sync** (`P4-4-3`): `UpdateRevisionStatus` hub method broadcasts `revision_status_changed`; client subscribes via `OnRevisionStatusChanged` and auto-reloads version tree.
+- **Accept / Reject / Batch UI** (`P4-4-4`): `✓ Accept`, `✗ Reject`, `↩ Rollback` buttons in Diff panel; `✓ Accept All` / `✗ Reject All` batch buttons in version tree footer; `StatusToBrushConverter` renders color-coded badges (pending=blue, accepted=green, rejected=red).
+
+### Tests
+- 25 total tests (24 pass / 1 skip); `CollabTrackChangesTests` verifies two-client SignalR broadcast E2E.
+
 ## [4.4.0-alpha2] - 2026-07-02
 
 ### Phase 4-4: DOCX Track Changes Exporter (Milestone P4-4-2)
@@ -14,6 +30,7 @@ This release implements standard layout templates, margins, dual-fonts, 6 outlin
 - **Dual-Script Fonts**: Integrated `styles.xml` doc defaults mapping English/Numbers to `Times New Roman` (11 pt) and Chinese characters to `DFKai-SB` (12 pt).
 - **6-Level Outlines**: Integrated `numbering.xml` multi-level lists supporting six levels of outlines (Chinese counting, decimal, letter formats) for heading outlines.
 - **Exporter Unit Tests**: Added `DocxTrackChangesTests.cs` verifying XML margins, paragraph properties, and track changes count in-memory.
+
 ## [4.4.0-alpha1] - 2026-07-02
 
 ### Phase 4-4: DOCX Track Changes (Milestone P4-4-1)

@@ -4,11 +4,12 @@ Momo is a high-performance, enterprise-grade audio transcription, speaker diariz
 
 ---
 
-## Current Release: Phase 3 (v3.0.0, 2026-06-26)
-This release marks the completion of **Phase 3 (RAG Orchestrator, Live Streaming, and Advanced UI Controls)**. It integrates Qdrant vector hybrid search, PubMed and SEC external provider clients, real-time WebSocket PCM audio streaming, and advanced interactive custom controls (Speaker Timeline & Glossary Tag Cloud) in Avalonia UI.
+## Current Release: Phase 4-4 (v4.4.0, 2026-07-02)
+This release marks the completion of **Phase 4-4 (DOCX Track Changes, Revision Status Management, and SignalR Sync)**. It adds Word-compatible `<w:ins>` / `<w:del>` track changes export, full Accept/Reject revision lifecycle (single + batch), real-time revision-status broadcasts over SignalR, and color-coded status badges in the Version History UI.
 
 *   For a complete list of updates, see [CHANGELOG.md](file:///d:/Antigravity/Project%203_Enterprise%20Momo/CHANGELOG.md).
-*   For detailed verification results and implementation walkthrough, see [walkthrough.md](file:///C:/Users/User/.gemini/antigravity-ide/brain/c797f12e-b800-48cf-8be7-d1a4c090332c/walkthrough.md).
+
+> **Previous release** — Phase 3 (v3.0.0): RAG Orchestrator, Live Streaming, Speaker Timeline & Glossary Tag Cloud.
 
 ---
 

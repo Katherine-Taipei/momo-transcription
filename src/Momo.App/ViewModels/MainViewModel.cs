@@ -365,6 +365,10 @@ public class MainViewModel : ViewModelBase
     }
 
     public ICommand RollbackCommand { get; }
+    public ICommand AcceptRevisionCommand { get; }
+    public ICommand RejectRevisionCommand { get; }
+    public ICommand BatchAcceptCommand { get; }
+    public ICommand BatchRejectCommand { get; }
 
     public MainViewModel() : this(@"d:\Antigravity\Project 3_Enterprise Momo\momo.db")
     {
@@ -402,6 +406,10 @@ public class MainViewModel : ViewModelBase
         ToggleSettingsCommand = ReactiveCommand.Create(() => { IsSettingsVisible = !IsSettingsVisible; });
         SelectTagCommand = ReactiveCommand.Create<string>(SelectTag);
         RollbackCommand = ReactiveCommand.CreateFromTask(RollbackToSelectedAsync);
+        AcceptRevisionCommand = ReactiveCommand.CreateFromTask(AcceptSelectedRevisionAsync);
+        RejectRevisionCommand = ReactiveCommand.CreateFromTask(RejectSelectedRevisionAsync);
+        BatchAcceptCommand = ReactiveCommand.CreateFromTask(BatchAcceptAllAsync);
+        BatchRejectCommand = ReactiveCommand.CreateFromTask(BatchRejectAllAsync);
 
         // Seed configurations folder structures & options
         SeedConfigurations();
@@ -1034,6 +1042,27 @@ public class MainViewModel : ViewModelBase
             }
         };
 
+        _collabClient.OnRevisionStatusChanged += (revId, status) =>
+        {
+            StatusText = $"Revision status updated to '{status}'! Reloading...";
+            Action updateAction = async () =>
+            {
+                await LoadRevisionsAsync();
+                if (status == "rejected")
+                {
+                    ReloadTranscriptFromDb();
+                }
+            };
+            if (Avalonia.Application.Current == null || Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                updateAction();
+            }
+            else
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(updateAction);
+            }
+        };
+
         try
         {
             await _collabClient.StartAsync();
@@ -1257,6 +1286,109 @@ public class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusText = $"Rollback error: {ex.Message}";
+        }
+    }
+
+    private async Task AcceptSelectedRevisionAsync()
+    {
+        if (_selectedRevision == null || string.IsNullOrEmpty(_activeTranscriptId)) return;
+        await UpdateRevisionStatusAsync(_selectedRevision.Id, "accepted");
+    }
+
+    private async Task RejectSelectedRevisionAsync()
+    {
+        if (_selectedRevision == null || string.IsNullOrEmpty(_activeTranscriptId)) return;
+        await UpdateRevisionStatusAsync(_selectedRevision.Id, "rejected");
+    }
+
+    private async Task BatchAcceptAllAsync()
+    {
+        if (string.IsNullOrEmpty(_activeTranscriptId)) return;
+        await BatchUpdateRevisionStatusAsync("accept");
+    }
+
+    private async Task BatchRejectAllAsync()
+    {
+        if (string.IsNullOrEmpty(_activeTranscriptId)) return;
+        await BatchUpdateRevisionStatusAsync("reject");
+    }
+
+    private async Task UpdateRevisionStatusAsync(string revisionId, string status)
+    {
+        try
+        {
+            var job = SelectedJob;
+            if (job == null) return;
+            await _subprocessHost.EnsureWorkerRunningAsync(job);
+            int port = _subprocessHost.ActivePort;
+            string? token = _subprocessHost.AuthToken;
+
+            using var httpClient = new HttpClient();
+            if (!string.IsNullOrEmpty(token))
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var payload = new { status, operator_name = UserId };
+            var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            var request = new HttpRequestMessage(HttpMethod.Patch, $"http://127.0.0.1:{port}/api/v1/revisions/{revisionId}")
+            {
+                Content = content
+            };
+            var response = await httpClient.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                StatusText = $"Revision {status}. Broadcasting...";
+                if (_collabClient != null && !string.IsNullOrEmpty(_activeTranscriptId))
+                    await _collabClient.SubmitRevisionStatusAsync(_activeTranscriptId, revisionId, status);
+                await LoadRevisionsAsync();
+                if (status == "rejected")
+                    ReloadTranscriptFromDb();
+            }
+            else
+            {
+                StatusText = $"Status update failed: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Status update error: {ex.Message}";
+        }
+    }
+
+    private async Task BatchUpdateRevisionStatusAsync(string action)
+    {
+        try
+        {
+            var job = SelectedJob;
+            if (job == null) return;
+            await _subprocessHost.EnsureWorkerRunningAsync(job);
+            int port = _subprocessHost.ActivePort;
+            string? token = _subprocessHost.AuthToken;
+
+            using var httpClient = new HttpClient();
+            if (!string.IsNullOrEmpty(token))
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var payload = new { action, operator_name = UserId };
+            var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            var response = await httpClient.PostAsync(
+                $"http://127.0.0.1:{port}/api/v1/transcripts/{_activeTranscriptId}/revisions/batch", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                StatusText = $"Batch {action} complete. Refreshing...";
+                await LoadRevisionsAsync();
+                if (action == "reject")
+                    ReloadTranscriptFromDb();
+            }
+            else
+            {
+                StatusText = $"Batch {action} failed: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Batch {action} error: {ex.Message}";
         }
     }
 

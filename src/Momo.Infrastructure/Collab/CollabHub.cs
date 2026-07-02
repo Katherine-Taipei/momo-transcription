@@ -77,4 +77,9 @@ public class CollabHub : Hub
     {
         await Clients.Group($"doc-{transcriptId}").SendAsync("rollback_applied", revisionId);
     }
+
+    public async Task UpdateRevisionStatus(string transcriptId, string revisionId, string status)
+    {
+        await Clients.Group($"doc-{transcriptId}").SendAsync("revision_status_changed", revisionId, status);
+    }
 }

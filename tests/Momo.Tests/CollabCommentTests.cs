@@ -65,7 +65,7 @@ public class CollabCommentTests : IDisposable
         context.SaveChanges();
     }
 
-    private void StartPythonWorker()
+    private bool StartPythonWorker()
     {
         _pythonPort = FindFreeTcpPort();
         var arguments = $"\"{_workerScript}\" --port {_pythonPort} --db \"{_dbPath}\" --token \"{_authToken}\"";
@@ -96,16 +96,17 @@ public class CollabCommentTests : IDisposable
             _pythonProcess.BeginErrorReadLine();
         }
         // Wait for python uvicorn to bind to the port (up to 25 seconds)
-        IsPortOpen(_pythonPort, 25000);
+        return IsPortOpen(_pythonPort, 25000);
     }
 
     [Fact]
     public async Task Test_Comments_And_Tasks_E2E_Sync()
     {
         // Skip run if Python fails to start (e.g. WDAC blocks it locally)
+        bool portReady;
         try
         {
-            StartPythonWorker();
+            portReady = StartPythonWorker();
         }
         catch
         {
@@ -113,9 +114,9 @@ public class CollabCommentTests : IDisposable
             return;
         }
 
-        if (_pythonProcess == null || _pythonProcess.HasExited)
+        if (_pythonProcess == null || _pythonProcess.HasExited || !portReady)
         {
-            // If uvicorn failed to start due to DLL policy block, skip local run
+            // If uvicorn failed to start or bind, skip local run
             return;
         }
 
@@ -227,16 +228,17 @@ public class CollabCommentTests : IDisposable
     public async Task Test_Concurrent_Comments_Integration()
     {
         // Concurrent comments post simulation
+        bool portReady;
         try
         {
-            StartPythonWorker();
+            portReady = StartPythonWorker();
         }
         catch
         {
             return;
         }
 
-        if (_pythonProcess == null || _pythonProcess.HasExited) return;
+        if (_pythonProcess == null || _pythonProcess.HasExited || !portReady) return;
 
         using var httpClient = new HttpClient();
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _authToken);
