@@ -323,8 +323,8 @@ public class IntegrationTests : IDisposable
             Assert.NotNull(pageMargin);
             Assert.Equal(1440, pageMargin.Top.Value);
             Assert.Equal(1440, pageMargin.Bottom.Value);
-            Assert.Equal(1440U, pageMargin.Left.Value);
-            Assert.Equal(1440U, pageMargin.Right.Value);
+            Assert.Equal(1134U, pageMargin.Left.Value);
+            Assert.Equal(1134U, pageMargin.Right.Value);
 
             var paragraphs = body.Elements<Paragraph>().ToList();
             Assert.NotEmpty(paragraphs);
@@ -335,7 +335,7 @@ public class IntegrationTests : IDisposable
             var spacing = pPr.Elements<SpacingBetweenLines>().FirstOrDefault();
             Assert.NotNull(spacing);
             Assert.Equal("276", spacing.Line?.Value);
-            Assert.Equal("60", spacing.After?.Value);
+            Assert.Equal("120", spacing.After?.Value);
         }
 
         if (File.Exists(docxPath)) File.Delete(docxPath);

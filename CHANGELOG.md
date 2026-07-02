@@ -2,6 +2,18 @@
 
 All notable changes to the Momo Transcription Platform will be documented in this file.
 
+## [4.4.0-alpha2] - 2026-07-02
+
+### Phase 4-4: DOCX Track Changes Exporter (Milestone P4-4-2)
+
+This release implements standard layout templates, margins, dual-fonts, 6 outline levels, and native `<w:ins>` / `<w:del>` track changes export using OpenXML stream-based writer.
+
+### Added
+- **OpenXML Track Changes Export**: Added stream-based `.docx` exporter mapping pending revisions to native `<w:ins>` / `<w:del>` XML tags with `Author` and `Date` metadata.
+- **A4 Layout & Default Spacing**: Standardized page layout with 2cm Left/Right margins (`1134` dxa) and paragraph properties having 1.15 line spacing and 6pt Before/After spacing (`120` dxa).
+- **Dual-Script Fonts**: Integrated `styles.xml` doc defaults mapping English/Numbers to `Times New Roman` (11 pt) and Chinese characters to `DFKai-SB` (12 pt).
+- **6-Level Outlines**: Integrated `numbering.xml` multi-level lists supporting six levels of outlines (Chinese counting, decimal, letter formats) for heading outlines.
+- **Exporter Unit Tests**: Added `DocxTrackChangesTests.cs` verifying XML margins, paragraph properties, and track changes count in-memory.
 ## [4.4.0-alpha1] - 2026-07-02
 
 ### Phase 4-4: DOCX Track Changes (Milestone P4-4-1)
