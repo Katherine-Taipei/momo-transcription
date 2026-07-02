@@ -2,6 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using DiffPlex;
+using DiffPlex.DiffBuilder;
+using DiffPlex.DiffBuilder.Model;
 using System.Linq;
 using System.Net.WebSockets;
 using System.Text;
@@ -285,6 +290,10 @@ public class MainViewModel : ViewModelBase
     private string? _activeTranscriptId;
     private int _serverRevision = 0;
     private readonly List<OtOperation> _pendingOperations = new();
+    private string _revisionSearchText = string.Empty;
+    private Revision? _selectedRevision;
+    private string _diffGranularity = "Word";
+    private bool _showAutosaves = true;
 
     public string UserId
     {
@@ -309,6 +318,53 @@ public class MainViewModel : ViewModelBase
     public ICommand CancelCommand { get; }
     public ICommand ToggleSettingsCommand { get; }
     public ICommand SelectTagCommand { get; }
+
+    public ObservableCollection<Revision> Revisions { get; } = new();
+    public ObservableCollection<Revision> FilteredRevisions { get; } = new();
+    public ObservableCollection<DiffRowViewModel> DiffRows { get; } = new();
+    public ObservableCollection<string> DiffGranularityOptions { get; } = new() { "Char", "Word", "Line" };
+
+    public string RevisionSearchText
+    {
+        get => _revisionSearchText;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _revisionSearchText, value);
+            UpdateFilteredRevisions();
+        }
+    }
+
+    public bool ShowAutosaves
+    {
+        get => _showAutosaves;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _showAutosaves, value);
+            UpdateFilteredRevisions();
+        }
+    }
+
+    public Revision? SelectedRevision
+    {
+        get => _selectedRevision;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedRevision, value);
+            UpdateDiff();
+        }
+    }
+
+    public string DiffGranularity
+    {
+        get => _diffGranularity;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _diffGranularity, value);
+            UpdateDiff();
+        }
+    }
+
+    public ICommand RollbackCommand { get; }
 
     public MainViewModel() : this(@"d:\Antigravity\Project 3_Enterprise Momo\momo.db")
     {
@@ -345,6 +401,7 @@ public class MainViewModel : ViewModelBase
         CancelCommand = ReactiveCommand.CreateFromTask(CancelJobAsync);
         ToggleSettingsCommand = ReactiveCommand.Create(() => { IsSettingsVisible = !IsSettingsVisible; });
         SelectTagCommand = ReactiveCommand.Create<string>(SelectTag);
+        RollbackCommand = ReactiveCommand.CreateFromTask(RollbackToSelectedAsync);
 
         // Seed configurations folder structures & options
         SeedConfigurations();
@@ -748,6 +805,7 @@ public class MainViewModel : ViewModelBase
 
         _activeTranscriptId = transcript.Id;
         _ = StartCollabConnectionAsync(_activeTranscriptId);
+        _ = LoadRevisionsAsync();
     }
 
     private void BuildTagCloud(Job job, List<ParagraphBuilder.ParagraphItem> rawParagraphs, AppDbContext context)
@@ -891,6 +949,7 @@ public class MainViewModel : ViewModelBase
     private async Task StartCollabConnectionAsync(string transcriptId)
     {
         await DisconnectCollabAsync();
+        _activeTranscriptId = transcriptId;
 
         _serverRevision = 0;
         _pendingOperations.Clear();
@@ -953,6 +1012,26 @@ public class MainViewModel : ViewModelBase
                 }
             }
             _serverRevision = op.Revision + 1;
+        };
+
+        _collabClient.OnRollbackApplied += revId =>
+        {
+            StatusText = "Rollback applied! Reloading transcript...";
+            lock (_pendingOperations)
+            {
+                _pendingOperations.Clear();
+            }
+            if (Avalonia.Application.Current == null || Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                ReloadTranscriptFromDb();
+            }
+            else
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    ReloadTranscriptFromDb();
+                });
+            }
         };
 
         try
@@ -1035,5 +1114,245 @@ public class MainViewModel : ViewModelBase
         _serverRevision = 0;
         _pendingOperations.Clear();
         OtherUsersCursors.Clear();
+    }
+
+    private void UpdateFilteredRevisions()
+    {
+        FilteredRevisions.Clear();
+        foreach (var rev in Revisions)
+        {
+            bool isAutosave = rev.CreatedBy.Equals("AUTOSAVE", StringComparison.OrdinalIgnoreCase) ||
+                             (rev.Description != null && rev.Description.Contains("AUTOSAVE", StringComparison.OrdinalIgnoreCase));
+            if (!ShowAutosaves && isAutosave)
+            {
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(RevisionSearchText) ||
+                rev.VersionNumber.ToString().Contains(RevisionSearchText) ||
+                rev.CreatedBy.Contains(RevisionSearchText, StringComparison.OrdinalIgnoreCase) ||
+                (rev.Description != null && rev.Description.Contains(RevisionSearchText, StringComparison.OrdinalIgnoreCase)))
+            {
+                FilteredRevisions.Add(rev);
+            }
+        }
+    }
+
+    private void UpdateDiff()
+    {
+        DiffRows.Clear();
+        if (_selectedRevision == null || string.IsNullOrEmpty(_activeTranscriptId)) return;
+
+        using var context = new AppDbContext(_dbOptions);
+        var transcript = context.Transcripts.Find(_activeTranscriptId);
+        string activeText = transcript?.RawText ?? string.Empty;
+        string selectedText = _selectedRevision.SnapshotText ?? string.Empty;
+
+        var builder = new SideBySideDiffBuilder(new Differ());
+        SideBySideDiffModel model;
+
+        if (_diffGranularity == "Char")
+        {
+            var oldChars = string.Join("\n", activeText.Select(c => c.ToString()));
+            var newChars = string.Join("\n", selectedText.Select(c => c.ToString()));
+            model = builder.BuildDiffModel(oldChars, newChars);
+        }
+        else if (_diffGranularity == "Word")
+        {
+            var oldWords = string.Join("\n", activeText.Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+            var newWords = string.Join("\n", selectedText.Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+            model = builder.BuildDiffModel(oldWords, newWords);
+        }
+        else // Line
+        {
+            model = builder.BuildDiffModel(activeText, selectedText);
+        }
+
+        int maxLines = Math.Max(model.OldText.Lines.Count, model.NewText.Lines.Count);
+        for (int i = 0; i < maxLines; i++)
+        {
+            var oldLine = i < model.OldText.Lines.Count ? model.OldText.Lines[i] : null;
+            var newLine = i < model.NewText.Lines.Count ? model.NewText.Lines[i] : null;
+
+            var row = new DiffRowViewModel();
+
+            if (oldLine != null)
+            {
+                row.OldText = oldLine.Text ?? string.Empty;
+                row.OldBackground = GetBgColorForChangeType(oldLine.Type);
+                row.OldForeground = GetFgColorForChangeType(oldLine.Type);
+            }
+
+            if (newLine != null)
+            {
+                row.NewText = newLine.Text ?? string.Empty;
+                row.NewBackground = GetBgColorForChangeType(newLine.Type);
+                row.NewForeground = GetFgColorForChangeType(newLine.Type);
+            }
+
+            DiffRows.Add(row);
+        }
+    }
+
+    private static string GetBgColorForChangeType(ChangeType type)
+    {
+        return type switch
+        {
+            ChangeType.Deleted => "#4E2A2E",
+            ChangeType.Inserted => "#1B4232",
+            ChangeType.Modified => "#364F6B",
+            _ => "Transparent"
+        };
+    }
+
+    private static string GetFgColorForChangeType(ChangeType type)
+    {
+        return type switch
+        {
+            ChangeType.Deleted => "#FF8B94",
+            ChangeType.Inserted => "#8CEE9D",
+            ChangeType.Modified => "#AEC9FF",
+            _ => "White"
+        };
+    }
+
+    private async Task RollbackToSelectedAsync()
+    {
+        if (_selectedRevision == null || string.IsNullOrEmpty(_activeTranscriptId)) return;
+
+        try
+        {
+            var job = SelectedJob;
+            if (job == null) return;
+
+            await _subprocessHost.EnsureWorkerRunningAsync(job);
+            int port = _subprocessHost.ActivePort;
+            string? token = _subprocessHost.AuthToken;
+
+            using var httpClient = new HttpClient();
+            if (!string.IsNullOrEmpty(token))
+            {
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var rollbackPayload = new Dictionary<string, string> { { "operator", UserId } };
+            var content = new StringContent(JsonSerializer.Serialize(rollbackPayload), Encoding.UTF8, "application/json");
+
+            var response = await httpClient.PostAsync($"http://127.0.0.1:{port}/api/v1/revisions/{_selectedRevision.Id}/rollback", content);
+            if (response.IsSuccessStatusCode)
+            {
+                StatusText = $"Rollback request successful. Broadcasting changes...";
+                
+                // Broadcast rollback event to all clients via SignalR
+                if (_collabClient != null)
+                {
+                    await _collabClient.SubmitRollbackAsync(_activeTranscriptId, _selectedRevision.Id);
+                }
+            }
+            else
+            {
+                StatusText = $"Rollback failed: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Rollback error: {ex.Message}";
+        }
+    }
+
+    public async Task LoadRevisionsAsync()
+    {
+        if (string.IsNullOrEmpty(_activeTranscriptId) || SelectedJob == null) return;
+
+        try
+        {
+            await _subprocessHost.EnsureWorkerRunningAsync(SelectedJob);
+            int port = _subprocessHost.ActivePort;
+            string? token = _subprocessHost.AuthToken;
+
+            using var httpClient = new HttpClient();
+            if (!string.IsNullOrEmpty(token))
+            {
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var response = await httpClient.GetAsync($"http://127.0.0.1:{port}/api/v1/transcripts/{_activeTranscriptId}/revisions");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var list = JsonSerializer.Deserialize<List<Revision>>(json, options);
+                
+                Action updateAction = () =>
+                {
+                     Revisions.Clear();
+                     if (list != null)
+                     {
+                         foreach (var rev in list)
+                         {
+                             Revisions.Add(rev);
+                         }
+                     }
+                     UpdateFilteredRevisions();
+                };
+
+                if (Avalonia.Application.Current == null || Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+                {
+                    updateAction();
+                }
+                else
+                {
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(updateAction);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Warning] Failed to load revisions: {ex.Message}");
+        }
+    }
+
+    private void ReloadTranscriptFromDb()
+    {
+        if (string.IsNullOrEmpty(_activeTranscriptId)) return;
+        
+        using var context = new AppDbContext(_dbOptions);
+        var transcript = context.Transcripts.FirstOrDefault(t => t.Id == _activeTranscriptId);
+        if (transcript == null) return;
+
+        // Load words, build paragraphs and populate UI
+        var words = context.TranscriptWords
+            .Where(w => w.TranscriptId == transcript.Id)
+            .OrderBy(w => w.StartTime)
+            .ToList();
+
+        var rawParagraphs = ParagraphBuilder.BuildFromWords(words);
+        var profiles = context.SpeakerProfiles.ToList();
+        var profileMap = profiles.ToDictionary(p => p.Id, p => p.DisplayName, StringComparer.OrdinalIgnoreCase);
+
+        CurrentParagraphs.Clear();
+        foreach (var rp in rawParagraphs)
+        {
+            string dispSpeaker = rp.Speaker;
+            if (profileMap.TryGetValue(rp.Speaker, out var mappedName))
+            {
+                dispSpeaker = mappedName;
+            }
+
+            var pvm = new ParagraphViewModel
+            {
+                Speaker = dispSpeaker,
+                StartTime = rp.StartTime,
+                EndTime = rp.EndTime,
+                Text = rp.Text,
+                TimestampText = FormatTime(rp.StartTime),
+                IsHighlighted = false
+            };
+            pvm.OnLocalEdit += HandleLocalParagraphEdit;
+            CurrentParagraphs.Add(pvm);
+        }
+
+        // Also refresh revisions list!
+        _ = LoadRevisionsAsync();
     }
 }

@@ -8,4 +8,7 @@ public interface ISubprocessHost
     Task StartWorkerAsync(Job job);
     Task StopWorkerAsync(string jobId);
     bool IsWorkerRunning(string jobId);
+    Task EnsureWorkerRunningAsync(Job job);
+    int ActivePort { get; }
+    string? AuthToken { get; }
 }

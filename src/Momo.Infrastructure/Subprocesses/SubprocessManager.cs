@@ -24,6 +24,8 @@ public class SubprocessManager : ISubprocessHost
     private string? _authToken;
 
     public Process? ActiveProcess => _activeProcess;
+    public int ActivePort => _activePort;
+    public string? AuthToken => _authToken;
 
     public SubprocessManager(string pythonExePath, string workerScriptPath, string databasePath)
     {
@@ -206,5 +208,51 @@ public class SubprocessManager : ISubprocessHost
         using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(bytes);
         return Convert.ToHexString(bytes);
+    }
+
+    public async Task EnsureWorkerRunningAsync(Job job)
+    {
+        if (_activeProcess != null && !_activeProcess.HasExited)
+        {
+            return;
+        }
+
+        _activeJobId = job.Id;
+        _activePort = FindFreeTcpPort();
+        _authToken = GenerateSecureToken();
+
+        var tempOutputDir = Path.Combine(Path.GetTempPath(), "Momo", "Chunks", job.Id);
+        Directory.CreateDirectory(tempOutputDir);
+
+        var arguments = $"\"{_workerScriptPath}\" --port {_activePort} --db \"{_databasePath}\" --token \"{_authToken}\"";
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = _pythonExePath,
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            WorkingDirectory = Path.GetDirectoryName(_workerScriptPath) ?? string.Empty
+        };
+
+        _activeProcess = new Process { StartInfo = startInfo };
+        _activeProcess.EnableRaisingEvents = true;
+
+        _activeProcess.OutputDataReceived += (s, e) => {
+            if (!string.IsNullOrEmpty(e.Data))
+                Console.WriteLine($"[Python STDOUT] {e.Data}");
+        };
+        _activeProcess.ErrorDataReceived += (s, e) => {
+            if (!string.IsNullOrEmpty(e.Data))
+                Console.Error.WriteLine($"[Python STDERR] {e.Data}");
+        };
+
+        _activeProcess.Start();
+        _activeProcess.BeginOutputReadLine();
+        _activeProcess.BeginErrorReadLine();
+
+        IsPortOpen(_activePort, 35000);
     }
 }
