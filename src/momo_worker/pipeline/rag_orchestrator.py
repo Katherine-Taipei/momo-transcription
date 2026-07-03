@@ -54,7 +54,8 @@ class BM25:
 
 
 class RagOrchestrator:
-    def __init__(self):
+    def __init__(self, db_helper: Any = None):
+        self.db_helper = db_helper
         self._model = None
         self._client = None
         self.collection_name = "momo_transcripts"
@@ -83,6 +84,32 @@ class RagOrchestrator:
                 self._client = QdrantClient(":memory:")
         return self._client
 
+    def get_embedding(self, text: str) -> List[float]:
+        text = text.strip()
+        if not text:
+            return [0.0] * self.vector_size
+
+        if self.db_helper:
+            import hashlib
+            text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+            try:
+                cached = self.db_helper.get_cached_embedding(text_hash)
+                if cached:
+                    return cached
+            except Exception:
+                pass
+
+        # Cache miss, generate dense embedding
+        vector = self.model.encode(text).tolist()
+
+        if self.db_helper:
+            try:
+                self.db_helper.save_cached_embedding(text_hash, vector)
+            except Exception:
+                pass
+
+        return vector
+
     def ensure_collection(self):
         try:
             collections = self.client.get_collections().collections
@@ -103,7 +130,7 @@ class RagOrchestrator:
             if not text:
                 continue
             
-            vector = self.model.encode(text).tolist()
+            vector = self.get_embedding(text)
             point_id = str(uuid.uuid4())
             payload = {
                 "project_id": str(project_id),
@@ -123,19 +150,21 @@ class RagOrchestrator:
             )
         return {"status": "SUCCESS", "count": len(points)}
 
-    def query_segments(self, project_id: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def query_segments(self, project_id: str, query: str, limit: int = 5, scope: str = "local") -> List[Dict[str, Any]]:
         self.ensure_collection()
-        vector = self.model.encode(query).tolist()
+        vector = self.get_embedding(query)
         
         from qdrant_client.models import Filter, FieldCondition, MatchValue
-        query_filter = Filter(
-            must=[
-                FieldCondition(
-                    key="project_id",
-                    match=MatchValue(value=str(project_id))
-                )
-            ]
-        )
+        query_filter = None
+        if scope == "local" and project_id:
+            query_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="project_id",
+                        match=MatchValue(value=str(project_id))
+                    )
+                ]
+            )
         
         res = self.client.query_points(
             collection_name=self.collection_name,
@@ -152,27 +181,36 @@ class RagOrchestrator:
             })
         return ret
 
-    def hybrid_search(self, db_helper: Any, project_id: str, query: str, limit: int = 5, k: int = 60) -> List[Dict[str, Any]]:
+    def hybrid_search(self, db_helper: Any, project_id: str, query: str, limit: int = 5, k: int = 60, scope: str = "local") -> List[Dict[str, Any]]:
         """
         Merge vector results (Qdrant) and keyword results (BM25) using Reciprocal Rank Fusion (RRF).
         """
-        # 1. Fetch vector results
-        vector_results = self.query_segments(project_id, query, limit=limit * 2)
+        # Load custom RRF_K parameter from environment variables if defined (User Request)
+        k_val = int(os.environ.get("RRF_K", k))
 
-        # 2. Fetch all segments for project to run BM25
+        # 1. Fetch vector results (scoping as local or global)
+        vector_results = self.query_segments(project_id, query, limit=limit * 2, scope=scope)
+
+        # 2. Fetch all segments to run BM25 keyword matching
         db_segments = []
         if db_helper:
             try:
-                db_segments = db_helper.get_project_segments(project_id)
+                if scope == "local" and project_id:
+                    db_segments = db_helper.get_project_segments(project_id)
+                else:
+                    db_segments = db_helper.get_all_segments()
             except Exception:
                 pass
         
-        # Fallback to local Qdrant collection documents if db query fails or yields nothing
+        # Fallback to local/global Qdrant collection documents if db query fails or yields nothing
         if not db_segments:
             try:
+                scroll_filter = None
+                if scope == "local" and project_id:
+                    scroll_filter = self._get_project_filter(project_id)
                 scroll_res = self.client.scroll(
                     collection_name=self.collection_name,
-                    scroll_filter=self._get_project_filter(project_id),
+                    scroll_filter=scroll_filter,
                     limit=100
                 )
                 db_segments = [p.payload for p in scroll_res[0]]
@@ -206,13 +244,13 @@ class RagOrchestrator:
             payload = item["payload"]
             key = get_doc_key(payload)
             doc_map[key] = payload
-            rrf_scores[key] = rrf_scores.get(key, 0.0) + 1.0 / (k + rank + 1)
+            rrf_scores[key] = rrf_scores.get(key, 0.0) + 1.0 / (k_val + rank + 1)
 
         for rank, item in enumerate(bm25_results):
             payload = item["payload"]
             key = get_doc_key(payload)
             doc_map[key] = payload
-            rrf_scores[key] = rrf_scores.get(key, 0.0) + 1.0 / (k + rank + 1)
+            rrf_scores[key] = rrf_scores.get(key, 0.0) + 1.0 / (k_val + rank + 1)
 
         sorted_keys = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
         

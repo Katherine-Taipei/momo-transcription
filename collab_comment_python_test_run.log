@@ -1,7 +1,10 @@
-Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 64621 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_comment_test.db" --token "test_token_collab"
+Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 52226 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_comment_test.db" --token "test_token_collab"
 [STDERR] [Diarization Warning] Failed to initialize Pyannote Diarization/Embedding: No module named 'pyannote'. Falling back to disabled diarizer.
 [STDERR] [Alignment Warning] Failed to initialize WhisperX Alignment: No module named 'whisperx'. Falling back to disabled aligner.
-[STDERR] INFO:     Started server process [28236]
+[STDERR] INFO:     Started server process [18952]
 [STDERR] INFO:     Waiting for application startup.
 [STDERR] INFO:     Application startup complete.
-[STDERR] INFO:     Uvicorn running on http://127.0.0.1:64621 (Press CTRL+C to quit)
+[STDERR] INFO:     Uvicorn running on http://127.0.0.1:52226 (Press CTRL+C to quit)
+[STDOUT] INFO:     127.0.0.1:52306 - "POST /api/v1/comments HTTP/1.1" 201 Created
+[STDOUT] INFO:     127.0.0.1:52307 - "POST /api/v1/comments HTTP/1.1" 201 Created
+[STDOUT] INFO:     127.0.0.1:52307 - "GET /api/v1/transcripts/trans_123/comments HTTP/1.1" 200 OK

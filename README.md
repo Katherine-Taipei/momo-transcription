@@ -4,8 +4,8 @@ Momo is a high-performance, enterprise-grade audio transcription, speaker diariz
 
 ---
 
-## Current Release: Phase 5-1 (v5.0.0-alpha1, 2026-07-03)
-This release marks the completion of **Phase 5-1 (Transcript Index Rebuild & Full-text Search)**. It adds fast CJK/English word indexing, database WAL batch index rebuilds with speaker and timestamps alignment, REST API search endpoints, split right-hand search/glossary UI panel, 3s automatic highlight fadeout, and Ctrl+F hotkey focus navigation controls.
+## Current Release: Phase 5-2 (v5.0.0-alpha2, 2026-07-03)
+This release marks the completion of **Phase 5-2 (RAG Vector Cache & Hybrid Search)**. It adds SQLite-based `embedding_cache` database table (providing 100% caching speedup), cross-project global vector collection querying and scoping control, and environment-configurable Reciprocal Rank Fusion (RRF) hybrid scoring.
 
 *   For a complete list of updates, see [CHANGELOG.md](file:///d:/Antigravity/Project%203_Enterprise%20Momo/CHANGELOG.md).
 

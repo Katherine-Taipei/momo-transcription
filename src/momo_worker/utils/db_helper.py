@@ -62,6 +62,15 @@ class DbHelper:
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_revisions_transcript_version ON revisions(transcript_id, version_number);")
             
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS embedding_cache (
+                    text_hash TEXT PRIMARY KEY,
+                    embedding_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_embedding_cache_created_at ON embedding_cache(created_at);")
+            
             cursor.execute("PRAGMA table_info(revisions);")
             columns = [row[1] for row in cursor.fetchall()]
             if columns and "status" not in columns:
@@ -220,6 +229,18 @@ class DbHelper:
                 WHERE t.project_id = ?
                 """,
                 (project_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_all_segments(self) -> list:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT tw.word as text, tw.start_time as start, tw.end_time as end, tw.speaker_id as speaker, t.media_file_id 
+                FROM transcripts t 
+                JOIN transcript_words tw ON t.id = tw.transcript_id 
+                """
             )
             return [dict(row) for row in cursor.fetchall()]
 
@@ -560,3 +581,21 @@ class DbHelper:
 
         duration_ms = (time.time() * 1000) - start_time_ms
         return (len(new_words), duration_ms)
+
+    def get_cached_embedding(self, text_hash: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT embedding_json FROM embedding_cache WHERE text_hash = ?", (text_hash,))
+            row = cursor.fetchone()
+            if row:
+                return json.loads(row["embedding_json"])
+            return None
+
+    def save_cached_embedding(self, text_hash: str, embedding):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO embedding_cache (text_hash, embedding_json, created_at) VALUES (?, ?, ?)",
+                (text_hash, json.dumps(embedding), datetime.utcnow().isoformat())
+            )
+            conn.commit()

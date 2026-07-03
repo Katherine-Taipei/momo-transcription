@@ -87,6 +87,13 @@ public static class Initializer
                     UNIQUE(transcript_id, version_number)
                 );
                 CREATE INDEX IF NOT EXISTS idx_revisions_transcript_version ON revisions(transcript_id, version_number);
+
+                CREATE TABLE IF NOT EXISTS embedding_cache (
+                    text_hash TEXT PRIMARY KEY,
+                    embedding_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_embedding_cache_created_at ON embedding_cache(created_at);
             ";
             command.ExecuteNonQuery();
         }

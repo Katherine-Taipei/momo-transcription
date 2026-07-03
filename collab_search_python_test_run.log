@@ -1,9 +1,9 @@
-Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 58484 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_search_test.db" --token "test_token_search"
+Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 53335 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_search_test.db" --token "test_token_search"
 [STDERR] [Diarization Warning] Failed to initialize Pyannote Diarization/Embedding: No module named 'pyannote'. Falling back to disabled diarizer.
 [STDERR] [Alignment Warning] Failed to initialize WhisperX Alignment: No module named 'whisperx'. Falling back to disabled aligner.
-[STDERR] INFO:     Started server process [19864]
+[STDERR] INFO:     Started server process [49536]
 [STDERR] INFO:     Waiting for application startup.
 [STDERR] INFO:     Application startup complete.
-[STDERR] INFO:     Uvicorn running on http://127.0.0.1:58484 (Press CTRL+C to quit)
-[STDOUT] INFO:     127.0.0.1:55481 - "POST /api/v1/transcripts/trans_search/rebuild_index HTTP/1.1" 200 OK
-[STDOUT] INFO:     127.0.0.1:55482 - "GET /api/v1/transcripts/trans_search/search?q=%E9%97%9C%E9%8D%B5%E5%AD%97&limit=50 HTTP/1.1" 200 OK
+[STDERR] INFO:     Uvicorn running on http://127.0.0.1:53335 (Press CTRL+C to quit)
+[STDOUT] INFO:     127.0.0.1:52289 - "POST /api/v1/transcripts/trans_search/rebuild_index HTTP/1.1" 200 OK
+[STDOUT] INFO:     127.0.0.1:52290 - "GET /api/v1/transcripts/trans_search/search?q=%E9%97%9C%E9%8D%B5%E5%AD%97&limit=50 HTTP/1.1" 200 OK

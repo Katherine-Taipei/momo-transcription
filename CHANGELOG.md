@@ -2,6 +2,18 @@
 
 All notable changes to the Momo Transcription Platform will be documented in this file.
 
+## [5.0.0-alpha2] - 2026-07-03
+
+### Phase 5-2: RAG Vector Cache & Hybrid Search
+
+This release implements SQLite-based dense embedding caching, cross-project global vector collection querying and scoping control, and environment-configurable Reciprocal Rank Fusion (RRF) hybrid scoring.
+
+### Added
+- **Embedding Cache Storage** (`P5-2-1`): Added `embedding_cache` database table mapping normalized segment SHA256 `text_hash` to serialized floats JSON representation. Added `created_at` database index for cache expiration cleanups. Implemented cache lookup/write hooks in `rag_orchestrator` yielding a 100% latency speedup (from 5s down to 0s) for cache hits.
+- **Global Collection Scoping** (`P5-2-2`): Transitioned to unified global vector index `momo_transcripts` using Qdrant. Embedded `project_id` payload filters to support both local (scoped project-specific) and global (cross-project cross-media) search routines.
+- **Hybrid RRF Sorting & Custom K** (`P5-2-3`): Implemented parallel BM25 keyword search and dense Qdrant queries merged via Reciprocal Rank Fusion. Read custom `RRF_K` parameter from environment variables to enable tuning of retrieval gradients.
+- **Unit and Stress Tests** (`P5-2-4`): Added python test suite (`test_phase5_p5_2.py`) validating embedding cache hit performance, global vs local filters, RRF k overrides, and 1,000-query RRF sorting stress test under 0.15s (well below 1s limit).
+
 ## [5.0.0-alpha1] - 2026-07-03
 
 ### Phase 5-1: Transcript Index Rebuild & Search

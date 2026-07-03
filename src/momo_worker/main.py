@@ -96,7 +96,7 @@ diarizer = Diarizer() if Diarizer else None
 transcript_master = TranscriptMaster() if TranscriptMaster else None
 glossaries_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "glossaries"))
 glossary_processor = GlossaryProcessor(glossaries_dir)
-rag_orchestrator = RagOrchestrator() if RagOrchestrator else None
+rag_orchestrator = RagOrchestrator(db_helper) if RagOrchestrator else None
 streaming_processor = StreamingProcessor() if StreamingProcessor else None
 
 # Active execution states
@@ -777,6 +777,7 @@ class QueryRequest(BaseModel):
     project_id: str
     query: str
     limit: int = 5
+    scope: str = "local"
 
 @app.post("/rag/ingest")
 def rag_ingest(request: IngestRequest, token: str = Depends(verify_token)):
@@ -791,7 +792,7 @@ def rag_query(request: QueryRequest, token: str = Depends(verify_token)):
     if rag_orchestrator is None:
         raise HTTPException(status_code=503, detail="RAG service is unavailable (failed to load torch/ctranslate2).")
     # 1. Hybrid Search (RRF of BM25 + Qdrant vectors)
-    results = rag_orchestrator.hybrid_search(db_helper, request.project_id, request.query, limit=request.limit)
+    results = rag_orchestrator.hybrid_search(db_helper, request.project_id, request.query, limit=request.limit, scope=request.scope)
     
     # 2. Fetch external findings (PubMed & SEC)
     external_findings = []

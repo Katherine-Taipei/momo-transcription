@@ -16,6 +16,7 @@ public class AppDbContext : DbContext
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<MomoTask> Tasks => Set<MomoTask>();
     public DbSet<Revision> Revisions => Set<Revision>();
+    public DbSet<EmbeddingCache> EmbeddingCaches => Set<EmbeddingCache>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
@@ -182,6 +183,17 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => new { e.TranscriptId, e.VersionNumber })
                   .IsUnique()
                   .HasDatabaseName("idx_revisions_transcript_version");
+        });
+
+        // EmbeddingCache Table Configuration
+        modelBuilder.Entity<EmbeddingCache>(entity =>
+        {
+            entity.ToTable("embedding_cache");
+            entity.HasKey(e => e.TextHash);
+            entity.Property(e => e.EmbeddingJson).IsRequired();
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasIndex(e => e.CreatedAt)
+                  .HasDatabaseName("idx_embedding_cache_created_at");
         });
 
         foreach (var entity in modelBuilder.Model.GetEntityTypes())
