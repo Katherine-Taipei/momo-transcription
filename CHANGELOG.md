@@ -2,6 +2,18 @@
 
 All notable changes to the Momo Transcription Platform will be documented in this file.
 
+## [5.0.0-alpha1] - 2026-07-03
+
+### Phase 5-1: Transcript Index Rebuild & Search
+
+This release implements fast SQLite index rebuilding, text tokenization, full-text search APIs, and right-sidebar search UI integration.
+
+### Added
+- **Fast SQLite Index Rebuild** (`P5-1-1`): Added tokenization for CJK characters and English alphanumeric blocks, realigning word speakers and timestamps using sliding-window algorithm under 18ms for 10k words. Optimized writes via SQLite WAL mode, synchronous=NORMAL, and 1000-row batching. Auto-triggered on database revisions rollback/rejection.
+- **REST Search API** (`P5-1-2`): Added `POST /api/v1/transcripts/{id}/rebuild_index` and `GET /api/v1/transcripts/{id}/search?q=query&limit=50` returning paragraph index, 30-char context window, and exact start/end match offsets.
+- **Search UI Integration** (`P5-1-3`): Implemented split-panel right sidebar containing search fields and glossary tag clouds in Avalonia. Added `Ctrl+F` shortcut focus, text selection, automatic 3-second highlight fadeout, and multi-occurrence arrow controls.
+- **Unit and Integration Tests** (`P5-1-4`): Added python unit test suite (`test_phase5_p5_1.py`) with 10,000-character stress test under 5s, and C# VM integration tests (`SearchTests.cs`) for query and navigation commands.
+
 ## [4.4.0] - 2026-07-02
 
 ### Phase 4-4: DOCX Track Changes – Full Release

@@ -625,6 +625,142 @@ def update_task(task_id: str, request: TaskUpdateRequest, token: str = Depends(v
 def get_transcript_tasks(transcript_id: str, token: str = Depends(verify_token)):
     return db_helper.get_tasks_by_transcript(transcript_id)
 
+def build_paragraphs(words: list) -> list:
+    paragraphs = []
+    if not words:
+        return paragraphs
+
+    delimiters = {'。', '！', '？', '.', '!', '?'}
+    current_text_parts = []
+    current_speaker = words[0]["speaker_id"]
+    sentence_start = words[0]["start_time"]
+    sentence_end = words[0]["end_time"]
+
+    for w in words:
+        word_text = w["word"]
+        if not word_text or word_text.isspace():
+            continue
+
+        if w["speaker_id"] != current_speaker:
+            if current_text_parts:
+                paragraphs.append({
+                    "speaker": current_speaker,
+                    "start": sentence_start,
+                    "end": sentence_end,
+                    "text": "".join(current_text_parts)
+                })
+                current_text_parts = []
+            current_speaker = w["speaker_id"]
+            sentence_start = w["start_time"]
+
+        # Handle English space prefix
+        if current_text_parts:
+            last_char = current_text_parts[-1][-1] if current_text_parts[-1] else ''
+            first_char = word_text[0]
+            if ord(last_char) < 128 and last_char != ' ' and ord(first_char) < 128:
+                current_text_parts.append(' ')
+        else:
+            sentence_start = w["start_time"]
+
+        current_text_parts.append(word_text)
+        sentence_end = w["end_time"]
+
+        duration = sentence_end - sentence_start
+        has_delimiter = any(c in delimiters for c in word_text)
+        length_exceeded = len("".join(current_text_parts)) > 120
+        duration_exceeded = duration >= 6.0
+
+        if has_delimiter or duration_exceeded or length_exceeded:
+            paragraphs.append({
+                "speaker": current_speaker,
+                "start": sentence_start,
+                "end": sentence_end,
+                "text": "".join(current_text_parts)
+            })
+            current_text_parts = []
+
+    if current_text_parts:
+        paragraphs.append({
+            "speaker": current_speaker,
+            "start": sentence_start,
+            "end": sentence_end,
+            "text": "".join(current_text_parts)
+        })
+
+    # Deduplicate contiguous identical paragraphs
+    deduplicated = []
+    for item in paragraphs:
+        if not item["text"].strip():
+            continue
+        if deduplicated:
+            last = deduplicated[-1]
+            last_norm = "".join(c.lower() for c in last["text"] if c.isalnum())
+            item_norm = "".join(c.lower() for c in item["text"] if c.isalnum())
+            if last["speaker"] == item["speaker"] and last_norm == item_norm:
+                last["end"] = item["end"]
+                continue
+        deduplicated.append(item)
+
+    return deduplicated
+
+@app.post("/api/v1/transcripts/{transcript_id}/rebuild_index")
+def rebuild_transcript_word_index(transcript_id: str, token: str = Depends(verify_token)):
+    transcript = db_helper.get_transcript(transcript_id)
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found.")
+    
+    inserted_count, duration_ms = db_helper.rebuild_transcript_index(transcript_id)
+    return {
+        "success": True,
+        "transcript_id": transcript_id,
+        "inserted_count": inserted_count,
+        "duration_ms": duration_ms
+    }
+
+@app.get("/api/v1/transcripts/{transcript_id}/search")
+def search_transcript(transcript_id: str, q: str, limit: int = 50, token: str = Depends(verify_token)):
+    transcript = db_helper.get_transcript(transcript_id)
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found.")
+    
+    if not q or not q.strip():
+        return []
+    
+    words = db_helper.get_transcript_words(transcript_id)
+    paragraphs = build_paragraphs(words)
+    
+    results = []
+    q_lower = q.lower()
+    for idx, p in enumerate(paragraphs):
+        p_text = p["text"]
+        p_text_lower = p_text.lower()
+        
+        start = 0
+        while len(results) < limit:
+            pos = p_text_lower.find(q_lower, start)
+            if pos == -1:
+                break
+            
+            # Context of 30 characters before and after
+            context_start = max(0, pos - 30)
+            context_end = min(len(p_text), pos + len(q) + 30)
+            context_str = p_text[context_start:context_end]
+            if context_start > 0:
+                context_str = "..." + context_str
+            if context_end < len(p_text):
+                context_str = context_str + "..."
+                
+            results.append({
+                "paragraph_id": f"para_{idx}",
+                "paragraph_index": idx,
+                "context": context_str,
+                "start_index": pos,
+                "end_index": pos + len(q)
+            })
+            start = pos + 1
+            
+    return results
+
 # Pydantic models for RAG
 class IngestSegment(BaseModel):
     start: float

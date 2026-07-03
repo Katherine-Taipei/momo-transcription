@@ -196,9 +196,10 @@ public class CollabRollbackTests : IDisposable
                 Assert.NotNull(trans);
                 Assert.Equal("Initial original text content.", trans.RawText);
                 
-                // Assert that transcript_words was deleted
+                // Assert that transcript_words was rebuilt after rollback
                 var words = await context.TranscriptWords.Where(w => w.TranscriptId == transcriptId).ToListAsync();
-                Assert.Empty(words);
+                Assert.NotEmpty(words);
+                Assert.Equal(5, words.Count);
             }
 
             // Cleanup SignalR clients

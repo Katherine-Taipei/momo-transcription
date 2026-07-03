@@ -4,8 +4,8 @@ Momo is a high-performance, enterprise-grade audio transcription, speaker diariz
 
 ---
 
-## Current Release: Phase 4-4 (v4.4.0, 2026-07-02)
-This release marks the completion of **Phase 4-4 (DOCX Track Changes, Revision Status Management, and SignalR Sync)**. It adds Word-compatible `<w:ins>` / `<w:del>` track changes export, full Accept/Reject revision lifecycle (single + batch), real-time revision-status broadcasts over SignalR, and color-coded status badges in the Version History UI.
+## Current Release: Phase 5-1 (v5.0.0-alpha1, 2026-07-03)
+This release marks the completion of **Phase 5-1 (Transcript Index Rebuild & Full-text Search)**. It adds fast CJK/English word indexing, database WAL batch index rebuilds with speaker and timestamps alignment, REST API search endpoints, split right-hand search/glossary UI panel, 3s automatic highlight fadeout, and Ctrl+F hotkey focus navigation controls.
 
 *   For a complete list of updates, see [CHANGELOG.md](file:///d:/Antigravity/Project%203_Enterprise%20Momo/CHANGELOG.md).
 

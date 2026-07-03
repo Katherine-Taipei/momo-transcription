@@ -11,7 +11,8 @@
         Title="Momo Local AI Transcription Dashboard"
         Width="1050" Height="650"
         WindowStartupLocation="CenterScreen"
-        Background="#12131C">
+        Background="#12131C"
+        KeyDown="Window_KeyDown">
 
     <Window.Resources>
         <converters:StatusToBrushConverter x:Key="StatusToBrushConverter"/>
@@ -130,8 +131,8 @@
                         <Border Grid.Column="0" Background="#1A1C29" CornerRadius="12" BorderBrush="#25273C" BorderThickness="1" Padding="15">
                             <Grid RowDefinitions="Auto, *">
                                 <TextBlock Grid.Row="0" Text="Transcript Editor" FontSize="14" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,10"/>
-                                <ScrollViewer Grid.Row="1">
-                                    <ItemsControl ItemsSource="{Binding CurrentParagraphs}">
+                                <ScrollViewer Grid.Row="1" x:Name="ParagraphScrollViewer">
+                                    <ItemsControl ItemsSource="{Binding CurrentParagraphs}" x:Name="ParagraphsItemsControl">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Border CornerRadius="8" Padding="12" Margin="0,0,0,10" BorderBrush="#25273C" BorderThickness="1">
@@ -167,11 +168,40 @@
                             </Grid>
                         </Border>
 
-                        <!-- Tag Cloud Sidebar Panel (Right) -->
+                        <!-- Search & Tag Cloud Sidebar Panel (Right) -->
                         <Border Grid.Column="2" Background="#1A1C29" CornerRadius="12" BorderBrush="#25273C" BorderThickness="1" Padding="15">
-                            <Grid RowDefinitions="Auto, *">
-                                <TextBlock Grid.Row="0" Text="Domain Glossary Tags" FontSize="14" FontWeight="SemiBold" Foreground="#8B5CF6" Margin="0,0,0,10"/>
-                                <ScrollViewer Grid.Row="1">
+                            <Grid RowDefinitions="Auto, Auto, 180, 15, Auto, *">
+                                <!-- Search Header -->
+                                <TextBlock Grid.Row="0" Text="Search Transcript (Ctrl+F)" FontSize="14" FontWeight="SemiBold" Foreground="#8B5CF6" Margin="0,0,0,10"/>
+                                <!-- Search Input & Nav Buttons -->
+                                <Grid Grid.Row="1" ColumnDefinitions="*, Auto, Auto" Margin="0,0,0,8">
+                                    <TextBox Grid.Column="0" x:Name="SearchTextBox" Watermark="Search keyword..." Text="{Binding SearchQuery, Mode=TwoWay}" CornerRadius="8" Background="#12131C" Foreground="White" BorderBrush="#25273C" Height="32" VerticalContentAlignment="Center"/>
+                                    <Button Grid.Column="1" Content="◀" Command="{Binding PrevMatchCommand}" ToolTip.Tip="Previous Match" Background="#25273C" Foreground="White" Width="30" Height="32" CornerRadius="8" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Margin="4,0,0,0"/>
+                                    <Button Grid.Column="2" Content="▶" Command="{Binding NextMatchCommand}" ToolTip.Tip="Next Match" Background="#25273C" Foreground="White" Width="30" Height="32" CornerRadius="8" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Margin="4,0,0,0"/>
+                                </Grid>
+                                <!-- Search Results List -->
+                                <ScrollViewer Grid.Row="2">
+                                    <ListBox ItemsSource="{Binding SearchResults}" SelectedItem="{Binding SelectedSearchResult}" Background="Transparent" BorderThickness="0" Padding="0">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border BorderBrush="#25273C" BorderThickness="0,0,0,1" Padding="4">
+                                                    <StackPanel Spacing="2">
+                                                        <TextBlock Text="{Binding Context}" TextWrapping="Wrap" FontSize="11" Foreground="White"/>
+                                                        <TextBlock Text="{Binding ParagraphIndex, StringFormat='Paragraph {0}'}" FontSize="10" Foreground="#6D7090"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </ScrollViewer>
+                                
+                                <!-- Separator -->
+                                <Rectangle Grid.Row="3" Height="1" Fill="#25273C" Margin="0,5"/>
+                                
+                                <!-- Tag Cloud Header -->
+                                <TextBlock Grid.Row="4" Text="Domain Glossary Tags" FontSize="14" FontWeight="SemiBold" Foreground="#8B5CF6" Margin="0,5,0,10"/>
+                                <!-- Tag Cloud ScrollViewer -->
+                                <ScrollViewer Grid.Row="5">
                                     <ItemsControl ItemsSource="{Binding TagCloudItems}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>

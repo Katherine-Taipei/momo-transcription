@@ -294,6 +294,11 @@ public class MainViewModel : ViewModelBase
     private Revision? _selectedRevision;
     private string _diffGranularity = "Word";
     private bool _showAutosaves = true;
+    private string _searchQuery = string.Empty;
+    private SearchResultViewModel? _selectedSearchResult;
+    private int _selectedSearchIndex = -1;
+    private ParagraphViewModel? _currentlyHighlightedParagraph;
+    private int _highlightToken = 0;
 
     public string UserId
     {
@@ -318,6 +323,36 @@ public class MainViewModel : ViewModelBase
     public ICommand CancelCommand { get; }
     public ICommand ToggleSettingsCommand { get; }
     public ICommand SelectTagCommand { get; }
+    public ICommand NextMatchCommand { get; }
+    public ICommand PrevMatchCommand { get; }
+
+    public string SearchQuery
+    {
+        get => _searchQuery;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _searchQuery, value);
+            _ = RunSearchAsync(value);
+        }
+    }
+
+    public ObservableCollection<SearchResultViewModel> SearchResults { get; } = new();
+
+    public SearchResultViewModel? SelectedSearchResult
+    {
+        get => _selectedSearchResult;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedSearchResult, value);
+            if (value != null)
+            {
+                _selectedSearchIndex = SearchResults.IndexOf(value);
+                OnSearchResultSelected(value);
+            }
+        }
+    }
+
+    public event Action<int, int, int>? ScrollToParagraphRequested;
 
     public ObservableCollection<Revision> Revisions { get; } = new();
     public ObservableCollection<Revision> FilteredRevisions { get; } = new();
@@ -410,6 +445,8 @@ public class MainViewModel : ViewModelBase
         RejectRevisionCommand = ReactiveCommand.CreateFromTask(RejectSelectedRevisionAsync);
         BatchAcceptCommand = ReactiveCommand.CreateFromTask(BatchAcceptAllAsync);
         BatchRejectCommand = ReactiveCommand.CreateFromTask(BatchRejectAllAsync);
+        NextMatchCommand = ReactiveCommand.Create(GoToNextMatch);
+        PrevMatchCommand = ReactiveCommand.Create(GoToPrevMatch);
 
         // Seed configurations folder structures & options
         SeedConfigurations();
@@ -945,6 +982,106 @@ public class MainViewModel : ViewModelBase
         if (firstMatch != null)
         {
             CurrentTime = firstMatch.StartTime;
+        }
+    }
+
+    private void GoToNextMatch()
+    {
+        if (SearchResults.Count == 0) return;
+        _selectedSearchIndex = (_selectedSearchIndex + 1) % SearchResults.Count;
+        SelectedSearchResult = SearchResults[_selectedSearchIndex];
+    }
+
+    private void GoToPrevMatch()
+    {
+        if (SearchResults.Count == 0) return;
+        _selectedSearchIndex = (_selectedSearchIndex - 1 + SearchResults.Count) % SearchResults.Count;
+        SelectedSearchResult = SearchResults[_selectedSearchIndex];
+    }
+
+    private async Task RunSearchAsync(string query)
+    {
+        if (string.IsNullOrEmpty(query) || string.IsNullOrEmpty(_activeTranscriptId))
+        {
+            SearchResults.Clear();
+            _selectedSearchIndex = -1;
+            foreach (var p in CurrentParagraphs)
+            {
+                p.IsHighlighted = false;
+            }
+            return;
+        }
+
+        try
+        {
+            var job = SelectedJob;
+            if (job == null) return;
+
+            await _subprocessHost.EnsureWorkerRunningAsync(job);
+            int port = _subprocessHost.ActivePort;
+            string? token = _subprocessHost.AuthToken;
+
+            using var httpClient = new HttpClient();
+            if (!string.IsNullOrEmpty(token))
+            {
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var response = await httpClient.GetAsync($"http://127.0.0.1:{port}/api/v1/transcripts/{_activeTranscriptId}/search?q={Uri.EscapeDataString(query)}&limit=50");
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var results = JsonSerializer.Deserialize<System.Collections.Generic.List<SearchResultViewModel>>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    SearchResults.Clear();
+                    _selectedSearchIndex = -1;
+                    if (results != null)
+                    {
+                        foreach (var r in results)
+                        {
+                            SearchResults.Add(r);
+                        }
+                    }
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Search failed: {ex.Message}");
+        }
+    }
+
+    private void OnSearchResultSelected(SearchResultViewModel result)
+    {
+        if (result.ParagraphIndex >= 0 && result.ParagraphIndex < CurrentParagraphs.Count)
+        {
+            foreach (var p in CurrentParagraphs)
+            {
+                p.IsHighlighted = false;
+            }
+            
+            var targetParagraph = CurrentParagraphs[result.ParagraphIndex];
+            targetParagraph.IsHighlighted = true;
+            _currentlyHighlightedParagraph = targetParagraph;
+            
+            int currentToken = ++_highlightToken;
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(3000);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (_highlightToken == currentToken && _currentlyHighlightedParagraph != null)
+                    {
+                        _currentlyHighlightedParagraph.IsHighlighted = false;
+                        _currentlyHighlightedParagraph = null;
+                    }
+                });
+            });
+
+            // Trigger view to scroll to it and select character range
+            ScrollToParagraphRequested?.Invoke(result.ParagraphIndex, result.StartIndex, result.EndIndex - result.StartIndex);
         }
     }
 

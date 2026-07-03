@@ -1,0 +1,13 @@
+Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 58471 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_revision_test.db" --token "test_token_revision"
+[STDERR] [Diarization Warning] Failed to initialize Pyannote Diarization/Embedding: No module named 'pyannote'. Falling back to disabled diarizer.
+[STDERR] [Alignment Warning] Failed to initialize WhisperX Alignment: No module named 'whisperx'. Falling back to disabled aligner.
+[STDERR] INFO:     Started server process [45148]
+[STDERR] INFO:     Waiting for application startup.
+[STDERR] INFO:     Application startup complete.
+[STDERR] INFO:     Uvicorn running on http://127.0.0.1:58471 (Press CTRL+C to quit)
+[STDOUT] INFO:     127.0.0.1:61416 - "POST /api/v1/revisions HTTP/1.1" 201 Created
+[STDOUT] INFO:     127.0.0.1:61416 - "GET /api/v1/revisions/589f7252-b9c8-4d48-ada6-2abaa1da1d0b HTTP/1.1" 200 OK
+[STDOUT] INFO:     127.0.0.1:61416 - "POST /api/v1/revisions HTTP/1.1" 201 Created
+[STDOUT] INFO:     127.0.0.1:61416 - "GET /api/v1/transcripts/trans_123/revisions HTTP/1.1" 200 OK
+[STDOUT] INFO:     127.0.0.1:61416 - "GET /api/v1/revisions/non_existent_id HTTP/1.1" 404 Not Found
+[STDOUT] INFO:     127.0.0.1:61416 - "GET /api/v1/transcripts/non_existent_transcript/revisions HTTP/1.1" 404 Not Found

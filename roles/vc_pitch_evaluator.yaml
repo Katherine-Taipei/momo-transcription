@@ -1,0 +1,7 @@
+﻿name: "VC Pitch Evaluator"
+goal: "Extract startup core values and metrics."
+output_sections:
+  - title: "Business Summary"
+    prompt: "Summarize core problems."
+  - title: "Financials"
+    prompt: "Funding requests."

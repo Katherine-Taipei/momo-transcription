@@ -393,8 +393,8 @@ class DbHelper:
                 "UPDATE transcripts SET raw_text = ?, updated_at = ? WHERE id = ?",
                 (snapshot_text, datetime.utcnow().isoformat(), transcript_id)
             )
-            cursor.execute("DELETE FROM transcript_words WHERE transcript_id = ?", (transcript_id,))
             conn.commit()
+        self.rebuild_transcript_index(transcript_id)
 
     def update_revision_status(self, revision_id: str, status: str) -> dict:
         with self._get_connection() as conn:
@@ -428,3 +428,135 @@ class DbHelper:
                 return row["snapshot_text"]
                 
             return None
+
+    def tokenize_text(self, text: str) -> list:
+        if not text:
+            return []
+        import re
+        # Match CJK characters, alphanumeric words, and non-whitespace symbols/punctuation individually
+        pattern = re.compile(r'[\u4e00-\u9fff]|\w+|[^\s\w\u4e00-\u9fff]')
+        return pattern.findall(text)
+
+    def get_transcript_words(self, transcript_id: str) -> list:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT word, start_time, end_time, speaker_id, confidence FROM transcript_words WHERE transcript_id = ? ORDER BY start_time",
+                (transcript_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def rebuild_transcript_index(self, transcript_id: str) -> tuple:
+        import time
+        start_time_ms = time.time() * 1000
+
+        # 1. Fetch raw_text
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT raw_text FROM transcripts WHERE id = ?", (transcript_id,))
+            row = cursor.fetchone()
+            if not row:
+                return (0, 0.0)
+            raw_text = row["raw_text"] or ""
+
+            # 2. Fetch existing words for alignment
+            cursor.execute(
+                "SELECT word, start_time, end_time, speaker_id, confidence FROM transcript_words WHERE transcript_id = ? ORDER BY start_time",
+                (transcript_id,)
+            )
+            old_words = [dict(r) for r in cursor.fetchall()]
+
+        # Perform tokenization and alignment
+        old_tokens = []
+        for ow in old_words:
+            tokens = self.tokenize_text(ow["word"])
+            if not tokens:
+                continue
+            n = len(tokens)
+            duration = ow["end_time"] - ow["start_time"]
+            token_dur = duration / n if n > 0 else 0.0
+            for idx, t in enumerate(tokens):
+                old_tokens.append({
+                    "word": t,
+                    "start_time": ow["start_time"] + idx * token_dur,
+                    "end_time": ow["start_time"] + (idx + 1) * token_dur,
+                    "speaker_id": ow["speaker_id"],
+                    "confidence": ow["confidence"]
+                })
+
+        new_tokens_strings = self.tokenize_text(raw_text)
+        new_words = []
+        old_idx = 0
+        last_end_time = 0.0
+        last_speaker = "Speaker_00"
+
+        for nt in new_tokens_strings:
+            matched_idx = -1
+            # Look ahead up to 50 tokens
+            for w_offset in range(50):
+                check_idx = old_idx + w_offset
+                if check_idx >= len(old_tokens):
+                    break
+                if old_tokens[check_idx]["word"].lower() == nt.lower():
+                    matched_idx = check_idx
+                    break
+            
+            if matched_idx != -1:
+                token_info = old_tokens[matched_idx]
+                start_time = token_info["start_time"]
+                end_time = token_info["end_time"]
+                speaker_id = token_info["speaker_id"]
+                confidence = token_info["confidence"]
+                
+                if start_time < last_end_time:
+                    start_time = last_end_time
+                    end_time = max(start_time + 0.1, end_time)
+                
+                old_idx = matched_idx + 1
+            else:
+                # Interpolate new/edited word
+                start_time = last_end_time
+                end_time = start_time + 0.2
+                speaker_id = last_speaker
+                confidence = 1.0
+                
+            last_end_time = end_time
+            last_speaker = speaker_id
+            
+            new_words.append((
+                transcript_id,
+                nt,
+                start_time,
+                end_time,
+                speaker_id,
+                confidence
+            ))
+
+        # 3. Write in batches using transaction and WAL options
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            # Apply performance optimizations for write speed
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("PRAGMA synchronous=NORMAL;")
+            
+            cursor.execute("DELETE FROM transcript_words WHERE transcript_id = ?", (transcript_id,))
+            
+            batch_size = 1000
+            for i in range(0, len(new_words), batch_size):
+                batch = new_words[i:i+batch_size]
+                cursor.executemany(
+                    "INSERT INTO transcript_words (transcript_id, word, start_time, end_time, speaker_id, confidence) VALUES (?, ?, ?, ?, ?, ?)",
+                    batch
+                )
+            conn.commit()
+
+        # 4. Run VACUUM outside transaction
+        try:
+            with self._get_connection() as conn:
+                conn.isolation_level = None  # needed for vacuum
+                conn.cursor().execute("VACUUM")
+        except Exception:
+            pass
+
+        duration_ms = (time.time() * 1000) - start_time_ms
+        return (len(new_words), duration_ms)

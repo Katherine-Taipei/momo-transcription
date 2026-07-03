@@ -1,0 +1,5 @@
+﻿name: "Standard"
+goal: "Generate default transcription summary."
+output_sections:
+  - title: "Summary"
+    prompt: "Summarize meeting."
