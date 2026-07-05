@@ -432,7 +432,13 @@ namespace Momo.Infrastructure.Updates
                 {
                     result.UpdateAvailable = true;
                     result.LatestVersion = remoteTag;
-                    result.Changelog = latestRelease.Body;
+                    
+                    var rawBody = latestRelease.Body ?? string.Empty;
+                    if (rawBody.Length > 102400)
+                    {
+                        rawBody = rawBody.Substring(0, 102400) + "... [Truncated due to size]";
+                    }
+                    result.Changelog = rawBody;
 
                     foreach (var asset in latestRelease.Assets)
                     {
