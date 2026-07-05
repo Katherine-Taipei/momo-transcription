@@ -27,6 +27,7 @@ using Momo.Infrastructure.Collab;
 using Momo.Infrastructure.Updates;
 using Momo.App.Utilities;
 using Momo.App.Updates;
+using Avalonia.Controls;
 using ReactiveUI;
 
 namespace Momo.App.ViewModels;
@@ -491,6 +492,15 @@ public class MainViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _updateChangelogText, value);
     }
 
+    private bool _isInstallingUpdate;
+    public bool IsInstallingUpdate
+    {
+        get => _isInstallingUpdate;
+        set => this.RaiseAndSetIfChanged(ref _isInstallingUpdate, value);
+    }
+
+    public ObservableCollection<Control> RenderedMarkdownControls { get; } = new();
+
     private UpdateBackgroundWorker? _updateWorker;
     private UpdateCheckResult? _pendingUpdateResult;
 
@@ -697,14 +707,15 @@ public class MainViewModel : ViewModelBase
             IsTelemetryModalVisible = false;
         });
 
-        InstallUpdateCommand = ReactiveCommand.Create(() =>
+        InstallUpdateCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            IsUpdateModalVisible = false;
+            IsInstallingUpdate = true;
             if (_pendingUpdateResult != null && !string.IsNullOrEmpty(_pendingUpdateResult.DownloadUrl))
             {
                 UpdateManager.LogUpdateMessage($"Executing update installation: {_pendingUpdateResult.LatestVersion}");
                 try
                 {
+                    await Task.Delay(1000); // Simulate execution delay
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = "cmd.exe",
@@ -715,6 +726,7 @@ public class MainViewModel : ViewModelBase
                 catch {}
                 Environment.Exit(0);
             }
+            IsInstallingUpdate = false;
         });
 
         RemindUpdateLaterCommand = ReactiveCommand.Create(() =>
@@ -792,22 +804,16 @@ public class MainViewModel : ViewModelBase
     private void OnUpdateFound(UpdateCheckResult result)
     {
         _pendingUpdateResult = result;
-        var cleanChangelog = "No release notes available.";
-        if (!string.IsNullOrEmpty(result.Changelog))
-        {
-            try
-            {
-                cleanChangelog = Markdig.Markdown.ToPlainText(result.Changelog);
-            }
-            catch
-            {
-                cleanChangelog = result.Changelog;
-            }
-        }
+        var changelog = result.Changelog ?? string.Empty;
         
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            UpdateChangelogText = cleanChangelog;
+            RenderedMarkdownControls.Clear();
+            var controls = MarkdownRenderer.Render(changelog);
+            foreach (var control in controls)
+            {
+                RenderedMarkdownControls.Add(control);
+            }
             IsUpdateModalVisible = true;
         });
     }
