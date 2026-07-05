@@ -17,6 +17,7 @@ public class AppDbContext : DbContext
     public DbSet<MomoTask> Tasks => Set<MomoTask>();
     public DbSet<Revision> Revisions => Set<Revision>();
     public DbSet<EmbeddingCache> EmbeddingCaches => Set<EmbeddingCache>();
+    public DbSet<TelemetryLog> TelemetryLogs => Set<TelemetryLog>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
