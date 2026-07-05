@@ -792,5 +792,106 @@ namespace Momo.Tests
             }
             Assert.False(isDue);
         }
+
+        [Fact]
+        public void TestLocalizationPlaceholdersParity()
+        {
+            var zhPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "Strings.zh-TW.json");
+            var enPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "Strings.en-US.json");
+
+            var zhContent = File.ReadAllText(zhPath);
+            var enContent = File.ReadAllText(enPath);
+
+            var zhDict = JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(zhContent);
+            var enDict = JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(enContent);
+
+            Assert.NotNull(zhDict);
+            Assert.NotNull(enDict);
+
+            foreach (var key in zhDict.Keys)
+            {
+                if (enDict.TryGetValue(key, out var enVal))
+                {
+                    var zhVal = zhDict[key];
+                    var zhMatches = System.Text.RegularExpressions.Regex.Matches(zhVal, @"\{[^}]+\}");
+                    var enMatches = System.Text.RegularExpressions.Regex.Matches(enVal, @"\{[^}]+\}");
+                    
+                    Assert.True(zhMatches.Count == enMatches.Count, 
+                        $"Placeholder count mismatch for key '{key}': zh-TW has {zhMatches.Count}, en-US has {enMatches.Count}.");
+
+                    var zhList = new List<string>();
+                    foreach (System.Text.RegularExpressions.Match m in zhMatches) zhList.Add(m.Value);
+                    
+                    var enList = new List<string>();
+                    foreach (System.Text.RegularExpressions.Match m in enMatches) enList.Add(m.Value);
+
+                    zhList.Sort();
+                    enList.Sort();
+
+                    for (int i = 0; i < zhList.Count; i++)
+                    {
+                        Assert.True(zhList[i] == enList[i], 
+                            $"Placeholder mismatch for key '{key}': zh-TW contains '{zhList[i]}', en-US contains '{enList[i]}'.");
+                    }
+                }
+            }
+        }
+
+        [Fact]
+        public async Task TestMarkdownRendererImageDownloadAndCache()
+        {
+            var imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90, 0x77, 0x53, 0xDE }; // Tiny 1x1 valid PNG
+            var testUrl = "https://example.com/test-notes-image.png";
+            
+            var handler = new MockHttpMessageHandler(request =>
+            {
+                Assert.Equal(testUrl, request.RequestUri?.ToString());
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(imageBytes)
+                });
+            });
+
+            using var sha = SHA256.Create();
+            var hash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(testUrl))).Replace("-", "").ToLowerInvariant();
+            var cacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Momo", "cache", "img");
+            var cachedPath = Path.Combine(cacheDir, hash + ".bin");
+
+            if (File.Exists(cachedPath))
+            {
+                File.Delete(cachedPath);
+            }
+
+            var originalClient = Momo.App.Utilities.MarkdownRenderer.HttpClientInstance;
+            using var client = new HttpClient(handler);
+            Momo.App.Utilities.MarkdownRenderer.HttpClientInstance = client;
+
+            try
+            {
+                var markdown = $"![Test Image]({testUrl})";
+                var controls = Momo.App.Utilities.MarkdownRenderer.Render(markdown);
+
+                Assert.Single(controls);
+                Assert.IsType<Avalonia.Controls.Panel>(controls[0]);
+
+                int retries = 30;
+                while (retries-- > 0 && !File.Exists(cachedPath))
+                {
+                    await Task.Delay(100);
+                }
+
+                Assert.True(File.Exists(cachedPath), "Image file should be written to cache");
+                var readBytes = await File.ReadAllBytesAsync(cachedPath);
+                Assert.Equal(imageBytes, readBytes);
+            }
+            finally
+            {
+                Momo.App.Utilities.MarkdownRenderer.HttpClientInstance = originalClient;
+                if (File.Exists(cachedPath))
+                {
+                    File.Delete(cachedPath);
+                }
+            }
+        }
     }
 }
