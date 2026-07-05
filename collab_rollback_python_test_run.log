@@ -1,9 +1,9 @@
-Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 63041 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_rollback_test.db" --token "test_token_rollback"
+Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 61238 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_rollback_test.db" --token "test_token_rollback"
 [STDERR] [Diarization Warning] Failed to initialize Pyannote Diarization/Embedding: No module named 'pyannote'. Falling back to disabled diarizer.
 [STDERR] [Alignment Warning] Failed to initialize WhisperX Alignment: No module named 'whisperx'. Falling back to disabled aligner.
-[STDERR] INFO:     Started server process [20260]
+[STDERR] INFO:     Started server process [16936]
 [STDERR] INFO:     Waiting for application startup.
 [STDERR] INFO:     Application startup complete.
-[STDERR] INFO:     Uvicorn running on http://127.0.0.1:63041 (Press CTRL+C to quit)
-[STDOUT] INFO:     127.0.0.1:60239 - "POST /api/v1/revisions HTTP/1.1" 201 Created
-[STDOUT] INFO:     127.0.0.1:60239 - "POST /api/v1/revisions/65e42e68-d702-428c-915a-6e9a10b8ec55/rollback HTTP/1.1" 200 OK
+[STDERR] INFO:     Uvicorn running on http://127.0.0.1:61238 (Press CTRL+C to quit)
+[STDOUT] INFO:     127.0.0.1:52674 - "POST /api/v1/revisions HTTP/1.1" 201 Created
+[STDOUT] INFO:     127.0.0.1:52674 - "POST /api/v1/revisions/ff6417e1-5623-49a4-88c7-2cd4df8ed812/rollback HTTP/1.1" 200 OK

@@ -1,9 +1,9 @@
-Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 63040 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_trackchanges_test.db" --token "test_token_trackchanges"
+Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 61235 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_trackchanges_test.db" --token "test_token_trackchanges"
 [STDERR] [Diarization Warning] Failed to initialize Pyannote Diarization/Embedding: No module named 'pyannote'. Falling back to disabled diarizer.
 [STDERR] [Alignment Warning] Failed to initialize WhisperX Alignment: No module named 'whisperx'. Falling back to disabled aligner.
-[STDERR] INFO:     Started server process [54304]
+[STDERR] INFO:     Started server process [37024]
 [STDERR] INFO:     Waiting for application startup.
 [STDERR] INFO:     Application startup complete.
-[STDERR] INFO:     Uvicorn running on http://127.0.0.1:63040 (Press CTRL+C to quit)
-[STDOUT] INFO:     127.0.0.1:60246 - "POST /api/v1/revisions HTTP/1.1" 201 Created
-[STDOUT] INFO:     127.0.0.1:60246 - "PATCH /api/v1/revisions/57f49b10-f3b4-4552-b686-5f04e1a3232f HTTP/1.1" 200 OK
+[STDERR] INFO:     Uvicorn running on http://127.0.0.1:61235 (Press CTRL+C to quit)
+[STDOUT] INFO:     127.0.0.1:52679 - "POST /api/v1/revisions HTTP/1.1" 201 Created
+[STDOUT] INFO:     127.0.0.1:52679 - "PATCH /api/v1/revisions/d908ab90-61b7-4904-9e4a-dcf991291462 HTTP/1.1" 200 OK

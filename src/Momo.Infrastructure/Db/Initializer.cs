@@ -94,6 +94,15 @@ public static class Initializer
                     created_at TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_embedding_cache_created_at ON embedding_cache(created_at);
+
+                CREATE TABLE IF NOT EXISTS telemetry_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    event_name TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    timestamp TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_telemetry_logs_session_id ON telemetry_logs(session_id);
             ";
             command.ExecuteNonQuery();
         }

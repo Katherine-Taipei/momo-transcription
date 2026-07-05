@@ -14,6 +14,27 @@ public class AppSettings
 
     [JsonPropertyName("BrandLogoPath")]
     public string BrandLogoPath { get; set; } = "Assets/logo_placeholder.png";
+
+    [JsonPropertyName("TelemetryOptIn")]
+    public bool? TelemetryOptIn { get; set; }
+
+    [JsonPropertyName("LastUpdateCheck")]
+    public DateTimeOffset LastUpdateCheck { get; set; } = DateTimeOffset.MinValue;
+
+    [JsonPropertyName("UpdateChannel")]
+    public string UpdateChannel { get; set; } = "stable";
+
+    [JsonPropertyName("UpdateRepository")]
+    public string UpdateRepository { get; set; } = "TaipeiMomo/momo";
+
+    [JsonPropertyName("LastGoodVersion")]
+    public string LastGoodVersion { get; set; } = "5.0.0-alpha3";
+
+    [JsonPropertyName("ConsecutiveFailures")]
+    public int ConsecutiveFailures { get; set; }
+
+    [JsonPropertyName("RolledBackFromVersion")]
+    public string RolledBackFromVersion { get; set; } = string.Empty;
 }
 
 public static class AppSettingsManager
