@@ -21,8 +21,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Markdig" Version="0.37.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Momo.Core\Momo.Core.csproj" />
     <ProjectReference Include="..\..\src\Momo.Infrastructure\Momo.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Momo.App\Momo.App.csproj" />
   </ItemGroup>
 
   <ItemGroup>
