@@ -24,6 +24,9 @@ using Momo.Infrastructure.Exporters;
 using Momo.Infrastructure.Queue;
 using Momo.Infrastructure.Subprocesses;
 using Momo.Infrastructure.Collab;
+using Momo.Infrastructure.Updates;
+using Momo.App.Utilities;
+using Momo.App.Updates;
 using ReactiveUI;
 
 namespace Momo.App.ViewModels;
@@ -339,6 +342,166 @@ public class MainViewModel : ViewModelBase
 
     public ObservableCollection<UserCursorViewModel> OtherUsersCursors { get; } = new();
 
+    // --- Dynamic Localization Properties ---
+    public string SettingsTitle => Localizer.GetString("SettingsTitle");
+    public string DomainGlossariesLabel => Localizer.GetString("DomainGlossaries");
+    public string VcAnalysisRoleLabel => Localizer.GetString("VcAnalysisRole");
+    public string ExportTemplateLabel => Localizer.GetString("ExportTemplate");
+    public string SoftwareUpdatesLabel => Localizer.GetString("SoftwareUpdates");
+    public string UpdateChannelLabel => Localizer.GetString("UpdateChannel");
+    public string CheckFrequencyLabel => Localizer.GetString("CheckFrequency");
+    public string TelemetryPrivacyLabel => Localizer.GetString("TelemetryPrivacy");
+    public string AnonymousTelemetryLabel => Localizer.GetString("AnonymousTelemetry");
+    public string LearnMoreLabel => Localizer.GetString("LearnMore");
+    public string LanguageLabel => Localizer.GetString("LanguageLabel");
+    public string TelemetryModalTitle => Localizer.GetString("TelemetryModalTitle");
+    public string TelemetryModalMessage => Localizer.GetString("TelemetryModalMessage");
+    public string AgreeText => Localizer.GetString("AgreeText");
+    public string DisagreeText => Localizer.GetString("DisagreeText");
+    public string DecideLaterText => Localizer.GetString("DecideLaterText");
+    public string UpdateModalTitle => Localizer.GetString("UpdateModalTitle");
+    public string UpdateModalSubTitle => Localizer.GetString("UpdateModalSubTitle");
+    public string InstallNowText => Localizer.GetString("InstallNowText");
+    public string RemindMeLaterText => Localizer.GetString("RemindMeLaterText");
+    public string ThemeLabel => Localizer.GetString("ThemeLabel");
+    public string SystemModeLabel => Localizer.GetString("SystemModeLabel");
+    public string LaptopSafeModeText => Localizer.GetString("LaptopSafeMode");
+
+    private void RefreshLocalizedStrings()
+    {
+        this.RaisePropertyChanged(nameof(SettingsTitle));
+        this.RaisePropertyChanged(nameof(DomainGlossariesLabel));
+        this.RaisePropertyChanged(nameof(VcAnalysisRoleLabel));
+        this.RaisePropertyChanged(nameof(ExportTemplateLabel));
+        this.RaisePropertyChanged(nameof(SoftwareUpdatesLabel));
+        this.RaisePropertyChanged(nameof(UpdateChannelLabel));
+        this.RaisePropertyChanged(nameof(CheckFrequencyLabel));
+        this.RaisePropertyChanged(nameof(TelemetryPrivacyLabel));
+        this.RaisePropertyChanged(nameof(AnonymousTelemetryLabel));
+        this.RaisePropertyChanged(nameof(LearnMoreLabel));
+        this.RaisePropertyChanged(nameof(LanguageLabel));
+        this.RaisePropertyChanged(nameof(TelemetryModalTitle));
+        this.RaisePropertyChanged(nameof(TelemetryModalMessage));
+        this.RaisePropertyChanged(nameof(AgreeText));
+        this.RaisePropertyChanged(nameof(DisagreeText));
+        this.RaisePropertyChanged(nameof(DecideLaterText));
+        this.RaisePropertyChanged(nameof(UpdateModalTitle));
+        this.RaisePropertyChanged(nameof(UpdateModalSubTitle));
+        this.RaisePropertyChanged(nameof(InstallNowText));
+        this.RaisePropertyChanged(nameof(RemindMeLaterText));
+        this.RaisePropertyChanged(nameof(ThemeLabel));
+        this.RaisePropertyChanged(nameof(SystemModeLabel));
+        this.RaisePropertyChanged(nameof(LaptopSafeModeText));
+    }
+
+    // --- Settings VM Properties ---
+    private string _selectedLanguage = "zh-TW";
+    public string SelectedLanguage
+    {
+        get => _selectedLanguage;
+        set
+        {
+            if (_selectedLanguage != value)
+            {
+                this.RaiseAndSetIfChanged(ref _selectedLanguage, value);
+                Localizer.SetLanguage(value);
+                var settings = AppSettingsManager.LoadSettings();
+                settings.Language = value;
+                AppSettingsManager.SaveSettings(settings);
+                RefreshLocalizedStrings();
+            }
+        }
+    }
+    public ObservableCollection<string> LanguageOptions { get; } = new() { "zh-TW", "en-US" };
+
+    private string _selectedUpdateChannel = "stable";
+    public string SelectedUpdateChannel
+    {
+        get => _selectedUpdateChannel;
+        set
+        {
+            if (_selectedUpdateChannel != value)
+            {
+                this.RaiseAndSetIfChanged(ref _selectedUpdateChannel, value);
+                var settings = AppSettingsManager.LoadSettings();
+                settings.UpdateChannel = value;
+                AppSettingsManager.SaveSettings(settings);
+            }
+        }
+    }
+    public ObservableCollection<string> UpdateChannelOptions { get; } = new() { "stable", "beta" };
+
+    private string _selectedUpdateFrequency = "Off";
+    public string SelectedUpdateFrequency
+    {
+        get => _selectedUpdateFrequency;
+        set
+        {
+            if (_selectedUpdateFrequency != value)
+            {
+                this.RaiseAndSetIfChanged(ref _selectedUpdateFrequency, value);
+                var settings = AppSettingsManager.LoadSettings();
+                settings.UpdateFrequency = value switch
+                {
+                    "Daily" => UpdateFrequency.Daily,
+                    "Weekly" => UpdateFrequency.Weekly,
+                    _ => UpdateFrequency.Off
+                };
+                AppSettingsManager.SaveSettings(settings);
+            }
+        }
+    }
+    public ObservableCollection<string> UpdateFrequencyOptions { get; } = new() { "Off", "Daily", "Weekly" };
+
+    private bool _isTelemetryEnabled;
+    public bool IsTelemetryEnabled
+    {
+        get => _isTelemetryEnabled;
+        set
+        {
+            if (_isTelemetryEnabled != value)
+            {
+                this.RaiseAndSetIfChanged(ref _isTelemetryEnabled, value);
+                var settings = AppSettingsManager.LoadSettings();
+                settings.TelemetryOptIn = value;
+                AppSettingsManager.SaveSettings(settings);
+            }
+        }
+    }
+
+    // --- Modal Presentation Visibilities ---
+    private bool _isTelemetryModalVisible;
+    public bool IsTelemetryModalVisible
+    {
+        get => _isTelemetryModalVisible;
+        set => this.RaiseAndSetIfChanged(ref _isTelemetryModalVisible, value);
+    }
+
+    private bool _isUpdateModalVisible;
+    public bool IsUpdateModalVisible
+    {
+        get => _isUpdateModalVisible;
+        set => this.RaiseAndSetIfChanged(ref _isUpdateModalVisible, value);
+    }
+
+    private string _updateChangelogText = string.Empty;
+    public string UpdateChangelogText
+    {
+        get => _updateChangelogText;
+        set => this.RaiseAndSetIfChanged(ref _updateChangelogText, value);
+    }
+
+    private UpdateBackgroundWorker? _updateWorker;
+    private UpdateCheckResult? _pendingUpdateResult;
+
+    // --- UI Commands ---
+    public ICommand OpenGdprPolicyCommand { get; }
+    public ICommand TelemetryAgreeCommand { get; }
+    public ICommand TelemetryDisagreeCommand { get; }
+    public ICommand TelemetryDecideLaterCommand { get; }
+    public ICommand InstallUpdateCommand { get; }
+    public ICommand RemindUpdateLaterCommand { get; }
+
     public ObservableCollection<Job> Jobs { get; } = new();
     public ObservableCollection<GlossaryItem> GlossaryOptions { get; } = new();
     public ObservableCollection<string> RoleOptions { get; } = new();
@@ -497,6 +660,124 @@ public class MainViewModel : ViewModelBase
         NextMatchCommand = ReactiveCommand.Create(GoToNextMatch);
         PrevMatchCommand = ReactiveCommand.Create(GoToPrevMatch);
 
+        // Updates & Telemetry Command Initializations
+        OpenGdprPolicyCommand = ReactiveCommand.Create(() =>
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "https://example.com/gdpr",
+                    UseShellExecute = true
+                });
+            }
+            catch {}
+        });
+
+        TelemetryAgreeCommand = ReactiveCommand.Create(() =>
+        {
+            IsTelemetryModalVisible = false;
+            IsTelemetryEnabled = true;
+            var s = AppSettingsManager.LoadSettings();
+            s.TelemetryOptIn = true;
+            AppSettingsManager.SaveSettings(s);
+        });
+
+        TelemetryDisagreeCommand = ReactiveCommand.Create(() =>
+        {
+            IsTelemetryModalVisible = false;
+            IsTelemetryEnabled = false;
+            var s = AppSettingsManager.LoadSettings();
+            s.TelemetryOptIn = false;
+            AppSettingsManager.SaveSettings(s);
+        });
+
+        TelemetryDecideLaterCommand = ReactiveCommand.Create(() =>
+        {
+            IsTelemetryModalVisible = false;
+        });
+
+        InstallUpdateCommand = ReactiveCommand.Create(() =>
+        {
+            IsUpdateModalVisible = false;
+            if (_pendingUpdateResult != null && !string.IsNullOrEmpty(_pendingUpdateResult.DownloadUrl))
+            {
+                UpdateManager.LogUpdateMessage($"Executing update installation: {_pendingUpdateResult.LatestVersion}");
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = "/c echo Update successful",
+                        UseShellExecute = true
+                    });
+                }
+                catch {}
+                Environment.Exit(0);
+            }
+        });
+
+        RemindUpdateLaterCommand = ReactiveCommand.Create(() =>
+        {
+            IsUpdateModalVisible = false;
+            var s = AppSettingsManager.LoadSettings();
+            var suppressSpan = s.UpdateFrequency == UpdateFrequency.Weekly ? TimeSpan.FromDays(7) : TimeSpan.FromDays(1);
+            s.NextUpdatePromptAt = DateTimeOffset.UtcNow.Add(suppressSpan);
+            AppSettingsManager.SaveSettings(s);
+            UpdateManager.LogUpdateMessage($"Update remind-later set. Suppressed until: {s.NextUpdatePromptAt}");
+        });
+
+        // Initialize state from AppSettings
+        _selectedLanguage = settings.Language;
+        _selectedUpdateChannel = settings.UpdateChannel;
+        _selectedUpdateFrequency = settings.UpdateFrequency switch
+        {
+            UpdateFrequency.Daily => "Daily",
+            UpdateFrequency.Weekly => "Weekly",
+            _ => "Off"
+        };
+        _isTelemetryEnabled = settings.TelemetryOptIn == true;
+
+        // Telemetry prompt modal logic
+        if (settings.TelemetryOptIn == null)
+        {
+            bool shouldPrompt = false;
+            if (settings.TelemetryPromptedCount == 0)
+            {
+                shouldPrompt = true;
+                settings.TelemetryPromptedCount = 1;
+                settings.LastTelemetryPromptDate = DateTimeOffset.UtcNow;
+                AppSettingsManager.SaveSettings(settings);
+            }
+            else if (settings.TelemetryPromptedCount == 1)
+            {
+                if (DateTimeOffset.UtcNow - settings.LastTelemetryPromptDate >= TimeSpan.FromDays(7))
+                {
+                    shouldPrompt = true;
+                    settings.TelemetryPromptedCount = 2;
+                    settings.LastTelemetryPromptDate = DateTimeOffset.UtcNow;
+                    AppSettingsManager.SaveSettings(settings);
+                }
+            }
+
+            if (shouldPrompt)
+            {
+                IsTelemetryModalVisible = true;
+            }
+        }
+
+        // Initialize UpdateBackgroundWorker
+        var httpClient = new HttpClient();
+        var updateManager = new UpdateManager(httpClient, "5.0.0-alpha3");
+        _updateWorker = new UpdateBackgroundWorker(
+            updateManager,
+            settings.UpdateRepository,
+            AppSettingsManager.LoadSettings,
+            AppSettingsManager.SaveSettings,
+            OnUpdateFound
+        );
+        _updateWorker.Start();
+
         // Seed configurations folder structures & options
         SeedConfigurations();
         LoadConfigurationOptions();
@@ -506,6 +787,29 @@ public class MainViewModel : ViewModelBase
 
         // Start Background Job Scheduler Loop
         Task.Run(SchedulerLoopAsync);
+    }
+
+    private void OnUpdateFound(UpdateCheckResult result)
+    {
+        _pendingUpdateResult = result;
+        var cleanChangelog = "No release notes available.";
+        if (!string.IsNullOrEmpty(result.Changelog))
+        {
+            try
+            {
+                cleanChangelog = Markdig.Markdown.ToPlainText(result.Changelog);
+            }
+            catch
+            {
+                cleanChangelog = result.Changelog;
+            }
+        }
+        
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            UpdateChangelogText = cleanChangelog;
+            IsUpdateModalVisible = true;
+        });
     }
 
     private void SeedConfigurations()

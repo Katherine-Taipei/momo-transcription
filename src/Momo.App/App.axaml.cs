@@ -50,6 +50,7 @@ namespace Momo.App
 
             // 2. Load settings and track consecutive startup failures
             var settings = AppSettingsManager.LoadSettings();
+            Momo.App.Utilities.Localizer.SetLanguage(settings.Language);
             settings.ConsecutiveFailures++;
             AppSettingsManager.SaveSettings(settings);
 
