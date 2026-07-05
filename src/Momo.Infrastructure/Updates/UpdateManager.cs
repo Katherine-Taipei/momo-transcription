@@ -133,6 +133,9 @@ namespace Momo.Infrastructure.Updates
         [JsonPropertyName("prerelease")]
         public bool Prerelease { get; set; }
 
+        [JsonPropertyName("body")]
+        public string Body { get; set; } = string.Empty;
+
         [JsonPropertyName("assets")]
         public GithubReleaseAsset[] Assets { get; set; } = Array.Empty<GithubReleaseAsset>();
     }
@@ -145,6 +148,7 @@ namespace Momo.Infrastructure.Updates
         public string PatchUrl { get; set; } = string.Empty;
         public string ExpectedHash { get; set; } = string.Empty;
         public string ExpectedPatchHash { get; set; } = string.Empty;
+        public string Changelog { get; set; } = string.Empty;
     }
 
     public class UpdateManager
@@ -428,6 +432,7 @@ namespace Momo.Infrastructure.Updates
                 {
                     result.UpdateAvailable = true;
                     result.LatestVersion = remoteTag;
+                    result.Changelog = latestRelease.Body;
 
                     foreach (var asset in latestRelease.Assets)
                     {
