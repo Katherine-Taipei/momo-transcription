@@ -1,7 +1,7 @@
-Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 60240 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_comment_test.db" --token "test_token_collab"
+Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 52663 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_comment_test.db" --token "test_token_collab"
 [STDERR] [Diarization Warning] Failed to initialize Pyannote Diarization/Embedding: No module named 'pyannote'. Falling back to disabled diarizer.
 [STDERR] [Alignment Warning] Failed to initialize WhisperX Alignment: No module named 'whisperx'. Falling back to disabled aligner.
-[STDERR] INFO:     Started server process [56248]
+[STDERR] INFO:     Started server process [32960]
 [STDERR] INFO:     Waiting for application startup.
 [STDERR] INFO:     Application startup complete.
-[STDERR] INFO:     Uvicorn running on http://127.0.0.1:60240 (Press CTRL+C to quit)
+[STDERR] INFO:     Uvicorn running on http://127.0.0.1:52663 (Press CTRL+C to quit)

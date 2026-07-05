@@ -2,6 +2,20 @@
 
 All notable changes to the Momo Transcription Platform will be documented in this file.
 
+## [5.0.0-alpha4] - 2026-07-05
+
+### Phase 5-4: Secure Updater & Rollback - Core Release
+
+This release implements secure signature pinning verification, automatic backup/restore rollback logic, HTTP 429 backoff rate limiting, and log rotation for the update service.
+
+### Added
+- **SHA-256 Pinning & WinVerifyTrust** (`P5-4-1a`): Integrated Authenticode verification via `WinVerifyTrust` and certificate public key SHA-256 fingerprint pinning loaded from `public_keys.json` with memory caching.
+- **Atomic Zip Backup & Auto-Rollback** (`P5-4-1b`): Implemented recursive zip backup of binary directories with retention of 2 backups. Added startup failure count tracking in `AppSettings` triggering automatic backup restoration. Locked file conflicts during rollback are handled by renaming files on-the-fly.
+- **Rollback Failure Safety** (`P5-4-1b`): Configured `!ROLLBACK-FAILED` flag file to handle restoration failure, prompting manual installation on next boot.
+- **HTTP 429 Retry & Suppression** (`P5-4-1c`): Added 5 retries with exponential backoff on HTTP 429, suppressing update checks for 24 hours on consecutive failure.
+- **Daily Log Rotation** (`P5-4-1c`): Implemented daily rotating `update.log` with automatic purging of logs older than 30 days.
+- **E2E Validation and Tests** (`P5-4-1d`): Extended update and telemetry test suite verifying certificate pinning, malicious file rejection/deletion, rate-limiting retry, and locked-file rollback recovery.
+
 ## [5.0.0-alpha3] - 2026-07-05
 
 ### Phase 5-3: UI Minor Changes & Installer Packaging
