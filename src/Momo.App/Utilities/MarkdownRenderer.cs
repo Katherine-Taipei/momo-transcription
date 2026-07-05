@@ -20,7 +20,9 @@ namespace Momo.App.Utilities
 {
     public static class MarkdownRenderer
     {
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private static HttpClient _httpClient = new HttpClient();
+        public static HttpClient HttpClientInstance { get => _httpClient; set => _httpClient = value; }
+
         private static readonly string CacheDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Momo", "cache", "img");
