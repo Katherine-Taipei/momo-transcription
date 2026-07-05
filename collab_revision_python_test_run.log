@@ -1,13 +1,13 @@
-Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 53325 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_revision_test.db" --token "test_token_revision"
+Starting python worker with args: "d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py" --port 63042 --db "D:\Antigravity\Project 3_Enterprise Momo\tests\Momo.Tests\bin\Debug\net8.0-windows\collab_revision_test.db" --token "test_token_revision"
 [STDERR] [Diarization Warning] Failed to initialize Pyannote Diarization/Embedding: No module named 'pyannote'. Falling back to disabled diarizer.
 [STDERR] [Alignment Warning] Failed to initialize WhisperX Alignment: No module named 'whisperx'. Falling back to disabled aligner.
-[STDERR] INFO:     Started server process [48160]
+[STDERR] INFO:     Started server process [53672]
 [STDERR] INFO:     Waiting for application startup.
 [STDERR] INFO:     Application startup complete.
-[STDERR] INFO:     Uvicorn running on http://127.0.0.1:53325 (Press CTRL+C to quit)
-[STDOUT] INFO:     127.0.0.1:52213 - "POST /api/v1/revisions HTTP/1.1" 201 Created
-[STDOUT] INFO:     127.0.0.1:52213 - "GET /api/v1/revisions/36606ffd-3641-4c25-b42a-ee3e94ebb7fc HTTP/1.1" 200 OK
-[STDOUT] INFO:     127.0.0.1:52213 - "POST /api/v1/revisions HTTP/1.1" 201 Created
-[STDOUT] INFO:     127.0.0.1:52213 - "GET /api/v1/transcripts/trans_123/revisions HTTP/1.1" 200 OK
-[STDOUT] INFO:     127.0.0.1:52213 - "GET /api/v1/revisions/non_existent_id HTTP/1.1" 404 Not Found
-[STDOUT] INFO:     127.0.0.1:52213 - "GET /api/v1/transcripts/non_existent_transcript/revisions HTTP/1.1" 404 Not Found
+[STDERR] INFO:     Uvicorn running on http://127.0.0.1:63042 (Press CTRL+C to quit)
+[STDOUT] INFO:     127.0.0.1:60209 - "POST /api/v1/revisions HTTP/1.1" 201 Created
+[STDOUT] INFO:     127.0.0.1:60209 - "GET /api/v1/revisions/9b1d7212-1542-44f5-aacd-6bb0e5ed052f HTTP/1.1" 200 OK
+[STDOUT] INFO:     127.0.0.1:60209 - "POST /api/v1/revisions HTTP/1.1" 201 Created
+[STDOUT] INFO:     127.0.0.1:60209 - "GET /api/v1/transcripts/trans_123/revisions HTTP/1.1" 200 OK
+[STDOUT] INFO:     127.0.0.1:60209 - "GET /api/v1/revisions/non_existent_id HTTP/1.1" 404 Not Found
+[STDOUT] INFO:     127.0.0.1:60209 - "GET /api/v1/transcripts/non_existent_transcript/revisions HTTP/1.1" 404 Not Found

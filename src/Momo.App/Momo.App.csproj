@@ -22,4 +22,13 @@
     <ProjectReference Include="..\Momo.Core\Momo.Core.csproj" />
     <ProjectReference Include="..\Momo.Infrastructure\Momo.Infrastructure.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Assets\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

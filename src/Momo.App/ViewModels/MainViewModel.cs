@@ -229,6 +229,37 @@ public class MainViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _isAlignmentEnabled, value);
     }
 
+    private string _themeSetting = "Auto";
+    public string ThemeSetting
+    {
+        get => _themeSetting;
+        set
+        {
+            if (_themeSetting != value)
+            {
+                this.RaiseAndSetIfChanged(ref _themeSetting, value);
+                var settings = AppSettingsManager.LoadSettings();
+                settings.Theme = value;
+                AppSettingsManager.SaveSettings(settings);
+                AppSettingsManager.ApplyTheme(value);
+            }
+        }
+    }
+
+    private string _brandLogoPath = "Assets/logo_placeholder.png";
+    public string BrandLogoPath
+    {
+        get => _brandLogoPath;
+        set => this.RaiseAndSetIfChanged(ref _brandLogoPath, value);
+    }
+
+    private Avalonia.Media.Imaging.Bitmap? _logoBitmap;
+    public Avalonia.Media.Imaging.Bitmap? LogoBitmap
+    {
+        get => _logoBitmap;
+        set => this.RaiseAndSetIfChanged(ref _logoBitmap, value);
+    }
+
     private bool _isSettingsVisible = false;
     public bool IsSettingsVisible
     {
@@ -358,6 +389,7 @@ public class MainViewModel : ViewModelBase
     public ObservableCollection<Revision> FilteredRevisions { get; } = new();
     public ObservableCollection<DiffRowViewModel> DiffRows { get; } = new();
     public ObservableCollection<string> DiffGranularityOptions { get; } = new() { "Char", "Word", "Line" };
+    public ObservableCollection<string> ThemeOptions { get; } = new() { "Auto", "Light", "Dark" };
 
     public string RevisionSearchText
     {
@@ -412,6 +444,23 @@ public class MainViewModel : ViewModelBase
     public MainViewModel(string dbPath)
     {
         _dbPath = dbPath;
+        
+        var settings = AppSettingsManager.LoadSettings();
+        _themeSetting = settings.Theme;
+        _brandLogoPath = settings.BrandLogoPath;
+        
+        if (!string.IsNullOrEmpty(_brandLogoPath) && File.Exists(_brandLogoPath))
+        {
+            try
+            {
+                LogoBitmap = new Avalonia.Media.Imaging.Bitmap(_brandLogoPath);
+            }
+            catch
+            {
+                // Ignore
+            }
+        }
+
         _pythonScriptPath = @"d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py";
 
         var builder = new DbContextOptionsBuilder<AppDbContext>();

@@ -2,6 +2,20 @@
 
 All notable changes to the Momo Transcription Platform will be documented in this file.
 
+## [5.0.0-alpha3] - 2026-07-05
+
+### Phase 5-3: UI Minor Changes & Installer Packaging
+
+This release implements dynamic light/dark theme switching, persistent appsettings.json storage in LocalAppData, corporate logo headers, momoctl CLI script wrappers, and automated Inno Setup prerequisites check.
+
+### Added
+- **Dynamic Theme Switcher** (`P5-3-1`): Configured dynamic FluentTheme variant selection in App.axaml and added Theme selection ComboBox to the sidebar footer (supporting Auto, Light, Dark options).
+- **Persistent App Settings** (`P5-3-1`): Implemented `AppSettingsManager` resolving and storing `appsettings.json` under `%APPDATA%\Momo\appsettings.json` to ensure write access under restricted environments, with fallback to installation directory templates.
+- **Corporate Logo Header** (`P5-3-1`): Integrated corporate branding logo layouts dynamically resolved from user-defined paths or assets.
+- **momoctl CLI & Script Wrapper** (`P5-3-2`): Added python-based `momoctl.py` CLI utility and Windows `.cmd` launchers in workspace root supporting `--version`, `rebuild-index`, and `export-docx` subcommands.
+- **Inno Setup Installer** (`P5-3-3`): Configured `momo_setup.iss` installation compiler script with Pascal routines executing `dotnet --list-runtimes` to automatically detect `.NET 8 Desktop Runtime` prerequisites.
+- **Unit and Integration Tests** (`P5-3-4`): Extended python test client verifying argparse execution, help listings, version output, and SQLite indexes.
+
 ## [5.0.0-alpha2] - 2026-07-03
 
 ### Phase 5-2: RAG Vector Cache & Hybrid Search
