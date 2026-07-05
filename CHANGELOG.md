@@ -2,6 +2,20 @@
 
 All notable changes to the Momo Transcription Platform will be documented in this file.
 
+## [5.0.0-alpha5] - 2026-07-05
+
+### Phase 5-4: UI & UX Alignment - Milestone Release
+
+This release implements localized zh-TW / en-US translation resource files, dynamic theme and language switching controls, custom UpdateFrequency settings, persistent update prompt suppression, GDPR/Telemetry Opt-in modals, and background update schedule execution.
+
+### Added
+- **Dynamic Localization & Culture Sync** (`P5-4-2a`): Added `Strings.zh-TW.json` and `Strings.en-US.json` localized dictionaries, supporting on-the-fly language switching and automatic synchronization of thread `CultureInfo` and formatting.
+- **Settings Controls & Persistent Storage** (`P5-4-2b`): Added language dropdown, update channel, and enum-backed `UpdateFrequency` (`Off=0`, `Daily=1`, `Weekly=2`) dropdown options to the settings sidebar of `MainWindow.axaml`. Saved selections persistently inside LocalAppData settings.
+- **GDPR / Telemetry Opt-in Popups** (`P5-4-2b`): Implemented a GDPR disclosures overlay modal showing on first launch, with prompt count tracking and 7-day interval re-prompt constraints if deferred.
+- **Update Modal & Markdig Changelog** (`P5-4-2c`): Configured `Markdig` to parse release notes markdown into clean text inside the Update Available dialog overlay.
+- **Background Update Scheduler** (`P5-4-2d`): Implemented `UpdateBackgroundWorker` running tasks in the background periodically to check updates based on interval schedules and suppressions.
+- **UI and Localization Unit Tests** (`P5-4-2d`): Added xUnit test suites verifying dynamic translation key matches, telemetry suppression boundaries, and scheduler calculations.
+
 ## [5.0.0-alpha4] - 2026-07-05
 
 ### Phase 5-4: Secure Updater & Rollback - Core Release
