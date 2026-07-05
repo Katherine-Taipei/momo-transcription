@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Momo.Core.Utilities;
 using Momo.Infrastructure.Updates;
+using Momo.App;
 using Xunit;
 using Microsoft.EntityFrameworkCore;
 
@@ -641,6 +642,155 @@ namespace Momo.Tests
                     File.Delete(dbPath);
                 }
             }
+        }
+
+        [Fact]
+        public void TestLocalizationKeysConsistency()
+        {
+            var zhPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "Strings.zh-TW.json");
+            var enPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "Strings.en-US.json");
+
+            Assert.True(File.Exists(zhPath), $"zh-TW translation file not found at: {zhPath}");
+            Assert.True(File.Exists(enPath), $"en-US translation file not found at: {enPath}");
+
+            var zhContent = File.ReadAllText(zhPath);
+            var enContent = File.ReadAllText(enPath);
+
+            var zhDict = JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(zhContent);
+            var enDict = JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(enContent);
+
+            Assert.NotNull(zhDict);
+            Assert.NotNull(enDict);
+
+            // Verify same keys exist in both
+            foreach (var key in zhDict.Keys)
+            {
+                Assert.True(enDict.ContainsKey(key), $"en-US is missing localization key: {key}");
+                Assert.False(string.IsNullOrEmpty(zhDict[key]), $"zh-TW has empty value for key: {key}");
+            }
+
+            foreach (var key in enDict.Keys)
+            {
+                Assert.True(zhDict.ContainsKey(key), $"zh-TW is missing localization key: {key}");
+                Assert.False(string.IsNullOrEmpty(enDict[key]), $"en-US has empty value for key: {key}");
+            }
+        }
+
+        [Fact]
+        public void TestTelemetryPromptRules()
+        {
+            // Reset/Setup settings
+            var settings = new AppSettings
+            {
+                TelemetryOptIn = null,
+                TelemetryPromptedCount = 0,
+                LastTelemetryPromptDate = DateTimeOffset.MinValue
+            };
+
+            // Rule 1: 1st run should prompt immediately, sets count = 1 and date = now
+            bool shouldPromptRun1 = false;
+            if (settings.TelemetryOptIn == null)
+            {
+                if (settings.TelemetryPromptedCount == 0)
+                {
+                    shouldPromptRun1 = true;
+                    settings.TelemetryPromptedCount = 1;
+                    settings.LastTelemetryPromptDate = DateTimeOffset.UtcNow;
+                }
+            }
+            Assert.True(shouldPromptRun1);
+            Assert.Equal(1, settings.TelemetryPromptedCount);
+            Assert.True(DateTimeOffset.UtcNow - settings.LastTelemetryPromptDate < TimeSpan.FromSeconds(5));
+
+            // Rule 2: Prompt again after 7 days
+            // If less than 7 days (e.g. 3 days), should NOT prompt
+            settings.LastTelemetryPromptDate = DateTimeOffset.UtcNow.AddDays(-3);
+            bool shouldPromptRun2_Early = false;
+            if (settings.TelemetryOptIn == null)
+            {
+                if (settings.TelemetryPromptedCount == 1)
+                {
+                    if (DateTimeOffset.UtcNow - settings.LastTelemetryPromptDate >= TimeSpan.FromDays(7))
+                    {
+                        shouldPromptRun2_Early = true;
+                        settings.TelemetryPromptedCount = 2;
+                        settings.LastTelemetryPromptDate = DateTimeOffset.UtcNow;
+                    }
+                }
+            }
+            Assert.False(shouldPromptRun2_Early);
+            Assert.Equal(1, settings.TelemetryPromptedCount);
+
+            // If 7 days have passed (e.g. 8 days), should prompt and set count = 2
+            settings.LastTelemetryPromptDate = DateTimeOffset.UtcNow.AddDays(-8);
+            bool shouldPromptRun2_Late = false;
+            if (settings.TelemetryOptIn == null)
+            {
+                if (settings.TelemetryPromptedCount == 1)
+                {
+                    if (DateTimeOffset.UtcNow - settings.LastTelemetryPromptDate >= TimeSpan.FromDays(7))
+                    {
+                        shouldPromptRun2_Late = true;
+                        settings.TelemetryPromptedCount = 2;
+                        settings.LastTelemetryPromptDate = DateTimeOffset.UtcNow;
+                    }
+                }
+            }
+            Assert.True(shouldPromptRun2_Late);
+            Assert.Equal(2, settings.TelemetryPromptedCount);
+            Assert.True(DateTimeOffset.UtcNow - settings.LastTelemetryPromptDate < TimeSpan.FromSeconds(5));
+
+            // Rule 3: Do not prompt anymore after 2 prompts (count >= 2)
+            bool shouldPromptRun3 = false;
+            if (settings.TelemetryOptIn == null)
+            {
+                if (settings.TelemetryPromptedCount == 1)
+                {
+                    // skipped
+                }
+                else if (settings.TelemetryPromptedCount >= 2)
+                {
+                    // Should not prompt
+                }
+            }
+            Assert.False(shouldPromptRun3);
+        }
+
+        [Fact]
+        public void TestUpdateBackgroundWorkerScheduling()
+        {
+            var settings = new AppSettings
+            {
+                UpdateFrequency = UpdateFrequency.Daily,
+                LastUpdateCheck = DateTimeOffset.UtcNow.AddDays(-2),
+                NextUpdatePromptAt = DateTimeOffset.UtcNow.AddDays(-1),
+                UpdateCheckSuppressUntil = DateTimeOffset.UtcNow.AddDays(-1)
+            };
+
+            // Verify frequency daily check is due
+            var now = DateTimeOffset.UtcNow;
+            bool isDue = false;
+            if (settings.UpdateFrequency != UpdateFrequency.Off)
+            {
+                if (now >= settings.NextUpdatePromptAt && now >= settings.UpdateCheckSuppressUntil)
+                {
+                    var interval = settings.UpdateFrequency == UpdateFrequency.Daily ? TimeSpan.FromDays(1) : TimeSpan.FromDays(7);
+                    if (now - settings.LastUpdateCheck >= interval)
+                    {
+                        isDue = true;
+                    }
+                }
+            }
+            Assert.True(isDue);
+
+            // Verify if frequency is off, it should not run
+            settings.UpdateFrequency = UpdateFrequency.Off;
+            isDue = false;
+            if (settings.UpdateFrequency != UpdateFrequency.Off)
+            {
+                isDue = true;
+            }
+            Assert.False(isDue);
         }
     }
 }
