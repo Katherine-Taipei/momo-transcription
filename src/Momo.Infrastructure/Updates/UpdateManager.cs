@@ -440,6 +440,7 @@ namespace Momo.Infrastructure.Updates
                     }
                     result.Changelog = rawBody;
 
+                    string? checksumsUrl = null;
                     foreach (var asset in latestRelease.Assets)
                     {
                         if (asset.Name.EndsWith(".exe") && !asset.Name.Contains("patch"))
@@ -449,6 +450,41 @@ namespace Momo.Infrastructure.Updates
                         else if (asset.Name.EndsWith(".patch"))
                         {
                             result.PatchUrl = asset.BrowserDownloadUrl;
+                        }
+                        else if (asset.Name.Equals("checksums.txt", StringComparison.OrdinalIgnoreCase))
+                        {
+                            checksumsUrl = asset.BrowserDownloadUrl;
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(checksumsUrl))
+                    {
+                        try
+                        {
+                            var checksumsContent = await _httpClient.GetStringAsync(checksumsUrl);
+                            var lines = checksumsContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                            foreach (var line in lines)
+                            {
+                                var parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                                if (parts.Length >= 2)
+                                {
+                                    var hash = parts[0].Trim();
+                                    var filename = parts[1].Trim();
+                                    
+                                    if (filename.EndsWith(".exe") && !filename.Contains("patch"))
+                                    {
+                                        result.ExpectedHash = hash;
+                                    }
+                                    else if (filename.EndsWith(".patch"))
+                                    {
+                                        result.ExpectedPatchHash = hash;
+                                    }
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            LogUpdateMessage($"Failed to download or parse checksums.txt: {ex.Message}");
                         }
                     }
                 }

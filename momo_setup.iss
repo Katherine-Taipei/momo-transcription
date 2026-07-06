@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Momo Enterprise Transcription"
-#define MyAppVersion "5.0.0-alpha2"
+#define MyAppVersion "5.0.0-beta1"
 #define MyAppPublisher "Taipei Momo"
 #define MyAppExeName "Momo.App.exe"
 
@@ -14,7 +14,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputBaseFilename=momo_setup
+OutputBaseFilename=momo_setup_beta1
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -55,7 +55,7 @@ begin
   begin
     if LoadStringsFromFile(TempFile, Lines) then
     begin
-      for I := 0; I < GetArrayLength(Lines) do
+      for I := 0 to GetArrayLength(Lines) - 1 do
       begin
         if Pos('Microsoft.WindowsDesktop.App 8.', Lines[I]) > 0 then
         begin
