@@ -1,1 +1,2 @@
 d9b5b4ff257543902b5711d77e022bbf0fb012e12d68b6491f81f3e922e150e5  momo_setup_beta1.exe
+8f68f3c1db7c9787036abd2edc20d980cc1c114d8de1c30241461f0baed39030  momo_setup_beta1-fix1.exe

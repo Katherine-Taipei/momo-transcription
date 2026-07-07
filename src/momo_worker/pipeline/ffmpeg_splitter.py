@@ -12,13 +12,22 @@ class FfmpegSplitter:
         self._resolve_binaries()
 
     def _resolve_binaries(self):
-        # Resolve global binaries
+        # 1. Check local bundled folder inside momo_worker
+        local_ffmpeg_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ffmpeg")
+        local_ffmpeg_path = os.path.join(local_ffmpeg_dir, "ffmpeg.exe")
+        local_ffprobe_path = os.path.join(local_ffmpeg_dir, "ffprobe.exe")
+        if os.path.exists(local_ffmpeg_path) and os.path.exists(local_ffprobe_path):
+            self.ffmpeg_exe = local_ffmpeg_path
+            self.ffprobe_exe = local_ffprobe_path
+            return
+
+        # 2. Resolve global binaries
         if shutil.which("ffmpeg") and shutil.which("ffprobe"):
             self.ffmpeg_exe = "ffmpeg"
             self.ffprobe_exe = "ffprobe"
             return
             
-        # Fallback to winget default paths on Windows
+        # 3. Fallback to winget default paths on Windows
         winget_ffmpeg_dir = r"C:\Users\User\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
         ffmpeg_path = os.path.join(winget_ffmpeg_dir, "ffmpeg.exe")
         ffprobe_path = os.path.join(winget_ffmpeg_dir, "ffprobe.exe")

@@ -26,6 +26,9 @@ public class SubprocessManager : ISubprocessHost
     public Process? ActiveProcess => _activeProcess;
     public int ActivePort => _activePort;
     public string? AuthToken => _authToken;
+    public string PythonExePath => _pythonExePath;
+    public string WorkerScriptPath => _workerScriptPath;
+    public string DatabasePath => _databasePath;
 
     public SubprocessManager(string pythonExePath, string workerScriptPath, string databasePath)
     {
