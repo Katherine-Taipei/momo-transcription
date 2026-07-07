@@ -2,6 +2,21 @@
 
 All notable changes to the Momo Transcription Platform will be documented in this file.
 
+## [5.0.0-beta1-fix1] - 2026-07-07
+
+### Phase β1-fix1 — Path Refactoring & Offline Packaging
+
+This patch release resolves runtime hardcoded path blockers on non-development machines and bundles offline FFmpeg dependencies.
+
+### Added
+- **Bundled Offline FFmpeg** (`beta1-fix1`): Included `ffmpeg.exe` and `ffprobe.exe` binaries directly in a nested `ffmpeg/` subdirectory inside the application package.
+- **LZMA2 Ultra Compression** (`beta1-fix1`): Upgraded Inno Setup configuration to `lzma2` compression with Solid Compression enabled, optimizing the bundle package footprint.
+
+### Fixed
+- **Relative Path Resolution** (`beta1-fix1`): Refactored all C# and Python worker absolute file references (`d:\Antigravity\...`) to use `AppDomain.CurrentDomain.BaseDirectory` and relative lookups, allowing installation and execution from any target directory.
+- **XAML Brand Logo Pathing** (`beta1-fix1`): Corrected dynamic relative path loading for brand logos to prevent loading failure under non-root execution contexts.
+- **Conforming Path Verification Tests** (`beta1-fix1`): Added `PathResolutionTests.cs` to verify C# database, Python script, and executable relative resolution and safe parallel test execution.
+
 ## [5.0.0-beta1] - 2026-07-06
 
 ### Phase 5-4: Visual Polish & Documentation (Feature Freeze)

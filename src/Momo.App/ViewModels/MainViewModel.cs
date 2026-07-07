@@ -610,7 +610,11 @@ public class MainViewModel : ViewModelBase
     public ICommand BatchAcceptCommand { get; }
     public ICommand BatchRejectCommand { get; }
 
-    public MainViewModel() : this(@"d:\Antigravity\Project 3_Enterprise Momo\momo.db")
+    public string DbPath => _dbPath;
+    public string PythonScriptPath => _pythonScriptPath;
+    public ISubprocessHost SubprocessHost => _subprocessHost;
+
+    public MainViewModel() : this(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "momo.db"))
     {
     }
 
@@ -622,11 +626,15 @@ public class MainViewModel : ViewModelBase
         _themeSetting = settings.Theme;
         _brandLogoPath = settings.BrandLogoPath;
         
-        if (!string.IsNullOrEmpty(_brandLogoPath) && File.Exists(_brandLogoPath))
+        var resolvedLogoPath = Path.IsPathRooted(_brandLogoPath) 
+            ? _brandLogoPath 
+            : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _brandLogoPath);
+
+        if (!string.IsNullOrEmpty(resolvedLogoPath) && File.Exists(resolvedLogoPath))
         {
             try
             {
-                LogoBitmap = new Avalonia.Media.Imaging.Bitmap(_brandLogoPath);
+                LogoBitmap = new Avalonia.Media.Imaging.Bitmap(resolvedLogoPath);
             }
             catch
             {
@@ -634,7 +642,7 @@ public class MainViewModel : ViewModelBase
             }
         }
 
-        _pythonScriptPath = @"d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\main.py";
+        _pythonScriptPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "momo_worker", "main.py");
 
         var builder = new DbContextOptionsBuilder<AppDbContext>();
         builder.UseSqlite($"Data Source={_dbPath}");
@@ -654,7 +662,7 @@ public class MainViewModel : ViewModelBase
         }
 
         _queueService = new QueueService(_dbOptions);
-        _subprocessHost = new SubprocessManager(@"d:\Antigravity\Project 3_Enterprise Momo\src\momo_worker\.venv\Scripts\python.exe", _pythonScriptPath, _dbPath);
+        _subprocessHost = new SubprocessManager(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "momo_worker", ".venv", "Scripts", "python.exe"), _pythonScriptPath, _dbPath);
 
         ImportCommand = ReactiveCommand.CreateFromTask<string>(ImportFileAsync);
         PauseCommand = ReactiveCommand.CreateFromTask(PauseJobAsync);
@@ -820,52 +828,60 @@ public class MainViewModel : ViewModelBase
 
     private void SeedConfigurations()
     {
-        var baseDir = @"d:\Antigravity\Project 3_Enterprise Momo";
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
         var glossariesDir = Path.Combine(baseDir, "glossaries");
         var rolesDir = Path.Combine(baseDir, "roles");
         var templatesDir = Path.Combine(baseDir, "templates");
 
-        Directory.CreateDirectory(glossariesDir);
-        Directory.CreateDirectory(rolesDir);
-        Directory.CreateDirectory(templatesDir);
+        try
+        {
+            Directory.CreateDirectory(glossariesDir);
+            Directory.CreateDirectory(rolesDir);
+            Directory.CreateDirectory(templatesDir);
 
-        var medicalPath = Path.Combine(glossariesDir, "medical.json");
-        if (!File.Exists(medicalPath))
-        {
-            File.WriteAllText(medicalPath, "{\n  \"terzipatide\": \"Tirzepatide\",\n  \"momo\": \"Momo\"\n}", Encoding.UTF8);
-        }
-        var financePath = Path.Combine(glossariesDir, "finance.json");
-        if (!File.Exists(financePath))
-        {
-            File.WriteAllText(financePath, "{\n  \"vc\": \"Venture Capital\",\n  \"ipo\": \"Initial Public Offering\"\n}", Encoding.UTF8);
-        }
+            var medicalPath = Path.Combine(glossariesDir, "medical.json");
+            if (!File.Exists(medicalPath))
+            {
+                File.WriteAllText(medicalPath, "{\n  \"terzipatide\": \"Tirzepatide\",\n  \"momo\": \"Momo\"\n}", Encoding.UTF8);
+            }
+            var financePath = Path.Combine(glossariesDir, "finance.json");
+            if (!File.Exists(financePath))
+            {
+                File.WriteAllText(financePath, "{\n  \"vc\": \"Venture Capital\",\n  \"ipo\": \"Initial Public Offering\"\n}", Encoding.UTF8);
+            }
 
-        var evaluatorPath = Path.Combine(rolesDir, "vc_pitch_evaluator.yaml");
-        if (!File.Exists(evaluatorPath))
-        {
-            File.WriteAllText(evaluatorPath, "name: \"VC Pitch Evaluator\"\ngoal: \"Extract startup core values and metrics.\"\noutput_sections:\n  - title: \"Business Summary\"\n    prompt: \"Summarize core problems.\"\n  - title: \"Financials\"\n    prompt: \"Funding requests.\"", Encoding.UTF8);
-        }
-        var defaultRolePath = Path.Combine(rolesDir, "default.yaml");
-        if (!File.Exists(defaultRolePath))
-        {
-            File.WriteAllText(defaultRolePath, "name: \"Standard\"\ngoal: \"Generate default transcription summary.\"\noutput_sections:\n  - title: \"Summary\"\n    prompt: \"Summarize meeting.\"", Encoding.UTF8);
-        }
+            var evaluatorPath = Path.Combine(rolesDir, "vc_pitch_evaluator.yaml");
+            if (!File.Exists(evaluatorPath))
+            {
+                File.WriteAllText(evaluatorPath, "name: \"VC Pitch Evaluator\"\ngoal: \"Extract startup core values and metrics.\"\noutput_sections:\n  - title: \"Business Summary\"\n    prompt: \"Summarize core problems.\"\n  - title: \"Financials\"\n    prompt: \"Funding requests.\"", Encoding.UTF8);
+            }
+            var defaultRolePath = Path.Combine(rolesDir, "default.yaml");
+            if (!File.Exists(defaultRolePath))
+            {
+                File.WriteAllText(defaultRolePath, "name: \"Standard\"\ngoal: \"Generate default transcription summary.\"\noutput_sections:\n  - title: \"Summary\"\n    prompt: \"Summarize meeting.\"", Encoding.UTF8);
+            }
 
-        var meetingSummaryPath = Path.Combine(templatesDir, "meeting_summary.md");
-        if (!File.Exists(meetingSummaryPath))
-        {
-            File.WriteAllText(meetingSummaryPath, "# Meeting Summary: {{ProjectName}}\n* **Duration**: {{DurationMinutes}} minutes\n* **Role**: {{RoleName}}\n\n## Participant Highlights\n{{#Speakers}}\n* **{{SpeakerName}}**: {{SpeakerDuration}} seconds\n{{/Speakers}}\n\n## Transcript\n{{#Paragraphs}}\n**[{{Timestamp}}] {{SpeakerName}}**: {{Text}}\n{{/Paragraphs}}", Encoding.UTF8);
+            var meetingSummaryPath = Path.Combine(templatesDir, "meeting_summary.md");
+            if (!File.Exists(meetingSummaryPath))
+            {
+                File.WriteAllText(meetingSummaryPath, "# Meeting Summary: {{ProjectName}}\n* **Duration**: {{DurationMinutes}} minutes\n* **Role**: {{RoleName}}\n\n## Participant Highlights\n{{#Speakers}}\n* **{{SpeakerName}}**: {{SpeakerDuration}} seconds\n{{/Speakers}}\n\n## Transcript\n{{#Paragraphs}}\n**[{{Timestamp}}] {{SpeakerName}}**: {{Text}}\n{{/Paragraphs}}", Encoding.UTF8);
+            }
+            var standardTemplatePath = Path.Combine(templatesDir, "standard.md");
+            if (!File.Exists(standardTemplatePath))
+            {
+                File.WriteAllText(standardTemplatePath, "# Transcript\n\n{{#Paragraphs}}\n**[{{Timestamp}}] {{SpeakerName}}**: {{Text}}\n\n{{/Paragraphs}}", Encoding.UTF8);
+            }
         }
-        var standardTemplatePath = Path.Combine(templatesDir, "standard.md");
-        if (!File.Exists(standardTemplatePath))
+        catch (Exception ex)
         {
-            File.WriteAllText(standardTemplatePath, "# Transcript\n\n{{#Paragraphs}}\n**[{{Timestamp}}] {{SpeakerName}}**: {{Text}}\n\n{{/Paragraphs}}", Encoding.UTF8);
+            // Ignore directory/file creation conflicts during parallel tests
+            Console.WriteLine($"[Warning] SeedConfigurations conflict: {ex.Message}");
         }
     }
 
     private void LoadConfigurationOptions()
     {
-        var baseDir = @"d:\Antigravity\Project 3_Enterprise Momo";
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
         var glossariesDir = Path.Combine(baseDir, "glossaries");
         var rolesDir = Path.Combine(baseDir, "roles");
         var templatesDir = Path.Combine(baseDir, "templates");
@@ -1013,7 +1029,7 @@ public class MainViewModel : ViewModelBase
                         var srtExporter = new SrtExporter(_dbOptions);
                         var docxExporter = new DocxExporter(_dbOptions);
 
-                        string? templateFile = nextJob.SelectedTemplate != null ? Path.Combine(@"d:\Antigravity\Project 3_Enterprise Momo\templates", nextJob.SelectedTemplate) : null;
+                        string? templateFile = nextJob.SelectedTemplate != null ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "templates", nextJob.SelectedTemplate) : null;
 
                         await txtExporter.ExportAsync(nextJob.MediaFileId, txtPath, templateFile);
                         await srtExporter.ExportAsync(nextJob.MediaFileId, srtPath);
@@ -1227,7 +1243,7 @@ public class MainViewModel : ViewModelBase
             catch { }
         }
 
-        var baseDir = @"d:\Antigravity\Project 3_Enterprise Momo";
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
         var glossariesDir = Path.Combine(baseDir, "glossaries");
         var termsToMatch = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 

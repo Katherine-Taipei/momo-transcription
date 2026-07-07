@@ -14,8 +14,8 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputBaseFilename=momo_setup_beta1
-Compression=lzma
+OutputBaseFilename=momo_setup_beta1-fix1
+Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 

@@ -12,8 +12,8 @@ def main():
     with open(changelog_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Match starting from ## [5.0.0-beta1] to the next ## heading
-    match = re.search(r'(## \[5\.0\.0-beta1\].*?)(?=^## \[|\Z)', content, re.DOTALL | re.MULTILINE)
+    # Match starting from ## [5.0.0-beta1-fix1] to ## [5.0.0-alpha5]
+    match = re.search(r'(## \[5\.0\.0-beta1-fix1\].*?)(?=^## \[5\.0\.0-alpha|\Z)', content, re.DOTALL | re.MULTILINE)
     
     if match:
         release_notes = match.group(1).strip()
@@ -22,7 +22,7 @@ def main():
             out.write(release_notes)
         print(f"Extracted release notes successfully to {output_path}")
     else:
-        print("Error: Could not find ## [5.0.0-beta1] section in CHANGELOG.md")
+        print("Error: Could not find ## [5.0.0-beta1-fix1] section in CHANGELOG.md")
 
 if __name__ == "__main__":
     main()
